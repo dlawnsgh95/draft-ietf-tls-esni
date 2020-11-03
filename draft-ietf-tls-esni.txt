@@ -346,7 +346,7 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
 
 4.  Encrypted ClientHello Configuration
 
-   ECH uses draft-05 of HPKE for public key encryption
+   ECH uses draft-06 of HPKE for public key encryption
    [I-D.irtf-cfrg-hpke].  The ECH configuration is defined by the
    following "ECHConfig" structure.
 
