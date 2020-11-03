@@ -77,7 +77,7 @@ Table of Contents
        6.3.1.  Accepted ECH  . . . . . . . . . . . . . . . . . . . .  15
        6.3.2.  Rejected ECH  . . . . . . . . . . . . . . . . . . . .  15
        6.3.3.  HelloRetryRequest . . . . . . . . . . . . . . . . . .  17
-     6.4.  GREASE Extensions . . . . . . . . . . . . . . . . . . . .  18
+     6.4.  GREASE Extensions . . . . . . . . . . . . . . . . . . . .  17
    7.  Server Behavior . . . . . . . . . . . . . . . . . . . . . . .  18
      7.1.  Client-Facing Server  . . . . . . . . . . . . . . . . . .  18
        7.1.1.  HelloRetryRequest . . . . . . . . . . . . . . . . . .  20
@@ -913,46 +913,25 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
    HelloRetryRequest processing apply.
 
    Clients bind encryption of the second ClientHelloInner to encryption
-   of the first ClientHelloInner via the derived ech_hrr_key by
-   modifying HPKE setup as follows:
+   of the first ClientHelloInner via the derived ech_hrr_key by running
+   a modified encryption process:
 
        pkR = Deserialize(ECHConfig.public_key)
        enc, context = SetupPSKS(pkR, "tls ech" || 0x00 || ECHConfig,
                                 ech_hrr_key, "hrr key")
+       payload = context.Seal(ClientHelloOuterAAD,
+                              EncodedClientHelloInner)
 
    The "info" parameter to SetupPSKS is the concatenation of "tls ech",
-   a zero byte, and the serialized ECHConfig.  Clients then encrypt the
-   second ClientHelloInner using this new HPKE context.  In doing so,
-   the encrypted value is also authenticated by ech_hrr_key.  The
-   rationale for this is described in Section 10.10.2.
-
-   Client-facing servers perform the corresponding process when
-   decrypting second ClientHelloInner messages.  In particular, upon
-   receipt of a second ClientHello message with a ClientECH value,
-   servers set up their HPKE context and decrypt ClientECH as follows:
-
-       context = SetupPSKR(ClientECH.enc, skR,
-           "tls ech" || 0x00 || ECHConfig, ech_hrr_key, "hrr key")
-       EncodedClientHelloInner = context.Open(ClientHelloOuterAAD,
-                                              ClientECH.payload)
-
-   ClientHelloOuterAAD is computed from the second ClientHelloOuter as
-   described in Section 5.2.  The "info" parameter to SetupPSKR is
-   computed as above.
+   a zero byte, and the serialized ECHConfig.  ClientHelloOuterAAD is
+   computed from the second ClientHelloOuter as described in
+   Section 5.2.  Note the encrypted value is also authenticated by
+   ech_hrr_key.  The rationale for this is described in Section 10.10.2.
 
    If the client offered ECH in the first ClientHello, then it MUST
    offer ECH in the second.  Likewise, if the client did not offer ECH
    in the first ClientHello, then it MUST NOT not offer ECH in the
    second.
-
-
-
-
-
-Rescorla, et al.           Expires 7 May 2021                  [Page 17]
-
-Internet-Draft         TLS Encrypted Client Hello          November 2020
-
 
    [[OPEN ISSUE: Should we be using the PSK input or the info input?  On
    the one hand, the requirements on info seem weaker, but maybe
@@ -963,6 +942,17 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
    If the client attempts to connect to a server and does not have an
    ECHConfig structure available for the server, it SHOULD send a GREASE
    [RFC8701] "encrypted_client_hello" extension as follows:
+
+
+
+
+
+
+
+Rescorla, et al.           Expires 7 May 2021                  [Page 17]
+
+Internet-Draft         TLS Encrypted Client Hello          November 2020
+
 
    *  Set the "cipher_suite" field to a supported ECHCipherSuite.  The
       selection SHOULD vary to exercise all supported configurations,
@@ -1003,13 +993,6 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
    extension will result in a new ClientHello to process, so even the
    client's TLS version preferences may have changed.
 
-
-
-Rescorla, et al.           Expires 7 May 2021                  [Page 18]
-
-Internet-Draft         TLS Encrypted Client Hello          November 2020
-
-
    First, the server collects a set of candidate ECHConfigs.  This set
    is determined by one of the two following methods:
 
@@ -1018,6 +1001,14 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
 
    2.  Collect all known ECHConfigs as candidates, with trial decryption
        below determining the final selection.
+
+
+
+
+Rescorla, et al.           Expires 7 May 2021                  [Page 18]
+
+Internet-Draft         TLS Encrypted Client Hello          November 2020
+
 
    Some uses of ECH, such as local discovery mode, may omit the
    ClientECH.config_id since it can be used as a tracking vector.  In
@@ -1051,6 +1042,15 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
    EncodedClientHelloInner, as described in Section 5.1.  It then stops
    considering candidate ECHConfigs.
 
+   Upon determining the ClientHelloInner, the client-facing server then
+   forwards the ClientHelloInner to the appropriate backend server,
+   which proceeds as in Section 7.2.  If the backend server responds
+   with a HelloRetryRequest, the client-facing server forwards it,
+   decrypts the client's second ClientHelloOuter using the modified
+   procedure in Section 7.1.1, and forwards the resulting second
+   ClientHelloInner.  The client-facing server forwards all other TLS
+   messages between the client and backend server unmodified.
+
 
 
 
@@ -1065,15 +1065,6 @@ Rescorla, et al.           Expires 7 May 2021                  [Page 19]
 
 Internet-Draft         TLS Encrypted Client Hello          November 2020
 
-
-   Upon determining the ClientHelloInner, the client-facing server then
-   forwards the ClientHelloInner to the appropriate backend server,
-   which proceeds as in Section 7.2.  If the backend server responds
-   with a HelloRetryRequest, the client-facing server forwards it,
-   decrypts the client's second ClientHelloOuter using the modified
-   procedure in Section 7.1.1, and forwards the resulting second
-   ClientHelloInner.  The client-facing server forwards all other TLS
-   messages between the client and backend server unmodified.
 
    Otherwise, if all candidate ECHConfigs fail to decrypt the extension,
    the client-facing server MUST ignore the extension and proceed with
@@ -1112,6 +1103,15 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
        aborts the connection with a "decrypt_error" alert rather than
        continuing the handshake with the second ClientHelloOuter.
 
+   When decrypting the second ClientECH.payload, the client-facing
+   server performs a corresponding process to Section 6.3.3:
+
+       context = SetupPSKR(ClientECH.enc, skR,
+           "tls ech" || 0x00 || ECHConfig, ech_hrr_key, "hrr key")
+       EncodedClientHelloInner = context.Open(ClientHelloOuterAAD,
+                                              ClientECH.payload)
+
+
 
 
 
@@ -1121,6 +1121,11 @@ Rescorla, et al.           Expires 7 May 2021                  [Page 20]
 
 Internet-Draft         TLS Encrypted Client Hello          November 2020
 
+
+   ClientHelloOuterAAD is computed from the second ClientHelloOuter as
+   described in Section 5.2.  The "info" parameter to SetupPSKR is the
+   concatenation of "tls ech", a zero byte, and the serialized
+   ECHConfig.
 
    [[OPEN ISSUE: If the client-facing server implements stateless HRR,
    it has no way to send a cookie, short of as-yet-unspecified
@@ -1164,11 +1169,6 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
    case of inconsistencies between systems that advertise ECH keys and
    servers, at the cost of extra round-trips due to a retry.  Two
    specific scenarios are detailed below.
-
-
-
-
-
 
 
 
