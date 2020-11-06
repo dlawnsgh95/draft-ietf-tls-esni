@@ -468,7 +468,7 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
    "encrypted_client_hello" extension, defined as follows:
 
        enum {
-          encrypted_client_hello(0xfe08), (65032)
+          encrypted_client_hello(0xfe08), (65535)
        } ExtensionType;
 
    When offered by the client, the extension appears in the
@@ -541,7 +541,7 @@ Internet-Draft         TLS Encrypted Client Hello          November 2020
    extension.
 
        enum {
-          outer_extensions(0xfd00), (64768)
+          outer_extensions(0xfd00), (65535)
        } ExtensionType;
 
        ExtensionType OuterExtensions<2..254>;
