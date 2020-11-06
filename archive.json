@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-11-03T20:53:22.853944+00:00",
+  "timestamp": "2020-11-06T19:03:13.121410+00:00",
   "repo": "tlswg/draft-ietf-tls-esni",
   "labels": [
     {
@@ -7742,17 +7742,17 @@
     {
       "number": 326,
       "id": "MDU6SXNzdWU3MTUyNjA1MzA=",
-      "title": "No encryption AD specified",
+      "title": "Include ECH context in ClientHelloOuterAAD",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/issues/326",
-      "state": "CLOSED",
+      "state": "OPEN",
       "author": "chris-wood",
       "authorAssociation": "COLLABORATOR",
       "assignees": [],
       "labels": [],
       "body": "@davidben mentions possibly binding the outer CH to the ECH encryption in #323. If we don't do that, we should at least bind the encryption to the non-encrypted parts of the ECH extension (`config_id`, `suite`, and so on).\r\n\r\ncc @cjpatton ",
       "createdAt": "2020-10-06T01:00:24Z",
-      "updatedAt": "2020-10-11T11:24:55Z",
-      "closedAt": "2020-10-11T11:24:54Z",
+      "updatedAt": "2020-11-04T19:48:40Z",
+      "closedAt": null,
       "comments": [
         {
           "author": "cjpatton",
@@ -7767,6 +7767,27 @@
           "body": "Closing in favor of #323. We can revisit the ECH extension AD information later if desired.",
           "createdAt": "2020-10-11T11:24:54Z",
           "updatedAt": "2020-10-11T11:24:54Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "Re-opening to consider adding *all* data to AAD. @davidben wrote out the flow if we did this:\r\n\r\n- Make your CHInner. This should largely be running through your usual CH assembly logic.\r\n- Encode it with the extensions you expect to compress.\r\n- Make your CHOuter, minus the ECH extension. This should largely run through your existing CH assembly logic.\r\n- Run Deserialize and SetupBaseS.\r\n- Compute CHOuterAAD with half an ECH extension.\r\n- Take EncodedCHInner and CHOuterAAD and run through the context.Seal logic to assemble the final CHOuter.\r\n\r\nSo, not great, but also not too terrible. I'd prefer we avoid falling into the \"gee, I sure wish we bound more to the encryption\" state, given the history of ECH, though I agree that this isn't cheap. \r\n\r\n@ekr, what do you think?",
+          "createdAt": "2020-11-04T19:33:34Z",
+          "updatedAt": "2020-11-04T19:33:34Z"
+        },
+        {
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "To be clear, the suggestion is to change AEAD encryption so that it authenticates `ClientECH.cipher_suite`, `.config_id`, and `.enc`, correct? This change seems sensible to me. One might argue that this is redundant because these parameters are incorporated into the transcript (on ECH rejection). On the other hand, ECH usage is resolved before the transcript is known! It seems like a good idea to authenticate these parameters before consuming them.",
+          "createdAt": "2020-11-04T19:43:31Z",
+          "updatedAt": "2020-11-04T19:47:03Z"
+        },
+        {
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "They aren't incorporated on ECH accept, which is mildly interesting. ECH accept also doesn't negotiate with them, so it's probably okay, though there is a \"don't stick out\" failure (depending on threat model) for the optional config_id flow if we don't authenticate them.",
+          "createdAt": "2020-11-04T19:48:40Z",
+          "updatedAt": "2020-11-04T19:48:40Z"
         }
       ]
     },
@@ -7883,7 +7904,7 @@
       "labels": [],
       "body": "It is unclear how a general TLS server is supposed to react to an ECH extension. It's sometimes empty and sometimes a ClientECH. An empty extension is not a valid ClientECH extension, so a server expending ClientECH should produce a `decode_error` (and vice versa).\r\n\r\nThe spec does talk about client-facing and backend servers as separate kinds of servers, but I thought the theory behind Split Mode was that backend servers were meant to be mostly standard TLS servers. That would suggest that backend-server-specific logic should be common to all TLS server implementations that know about ECH. In that case, perhaps we should say that:\r\n\r\n* The client ECH extension is either empty or a ClientECH structure.\r\n* If you see empty, this is an inner ClientHello. Do the ServerHello.random thing and otherwise handshake normally.\r\n* If you see non-empty and have ECHConfigs, parse as a ClientECH and decode_error on parse failure as usual. Do the client-facing server thing.\r\n\r\nOr is the idea that client-facing and backend servers are completely separate beasts and everyone always knows which they are? In that case, what happens if a client-facing server sees an empty ECH extension? What happens if a backend server sees a ClientECH-carrying ECH extension. Failure to parse an extension is normally fatal, but the two categories of server believe different parses are valid. In particular, this requires a backend server *never* see a general-purpose client connection, since it'd get confused by (possibly GREASE) ClientECH extensions.",
       "createdAt": "2020-10-19T21:10:47Z",
-      "updatedAt": "2020-11-02T18:35:36Z",
+      "updatedAt": "2020-11-03T21:04:45Z",
       "closedAt": null,
       "comments": [
         {
@@ -7976,6 +7997,13 @@
           "body": "Oh sorry, missed that was waiting on me. Looking.",
           "createdAt": "2020-11-02T18:35:36Z",
           "updatedAt": "2020-11-02T18:35:36Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "I landed #350. We can spin up a PR with separate codepoints now, if desired. (I also like the idea!)",
+          "createdAt": "2020-11-03T21:04:45Z",
+          "updatedAt": "2020-11-03T21:04:45Z"
         }
       ]
     },
@@ -8055,11 +8083,56 @@
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
       "labels": [],
-      "body": "The primary \"don't stick out\" [RFC8744] consideration for ECH is to ensure that the new extension does not trigger middlebox misbehavior. To accomplish this, the draft specifies two protocol variants: in the \"real-ECH\" protocol the client offers the ECH extension, which is processed by the server; in the \"grease-ECH\" protocol, the client generates a dummy ECH extension, which is ignored or rejected by the server. Grease-ECH is designed to look enough like real-ECH so that middleboxes do not differentiate the latter from the former, the idea being that if grease-ECH can be deployed without triggering middlebox misbehavior, then real-ECH ought to be deployable, too.\r\n\r\nBut what do we mean when we say grease-ECH should \"look like\" real-ECH? In ECH-08 the stated goal is \"to hide, to some extent, **(a)** whether or not a specific server supports ECH and **(b)** whether or not ECH was accepted for a particular connection\" [ECH-08, [Sec.10.1](https://tools.ietf.org/html/draft-ietf-tls-esni-08#section-10.1)]. These goals are hard to meet. First, an attacker can violate **(a)** by simply running grease-ECH with the server to see if it returns retry configs. Second, there are a number of ways to distinguish real-ECH from grease-ECH, thereby violating **(b)**:\r\n1. @huitema's [client-reaction attack](https://mailarchive.ietf.org/arch/msg/tls/EAeKCNq7JAFm8DFaoe2MwSslZTQ/).\r\n1. If the ECH config is known to the attacker, then it can use ClientECH.config_id to distinguish real-ECH from grease-ECH. \r\n1. The outer SNI must match ECHConfig.public_name. Hence, for connections to a given backend server, the outer SNI will be different in real-ECH than in grease-ECH.\r\n1. The client and server must negotiate TLS 1.3 when ECH is accepted, but may otherwise negotiate an earlier version. In particular, it is valid for a client to run grease-ECH but not indicate support for 1.3.\r\n1. PSK must not be offered in the outer CH in real-ECH, but may be offered in grease-ECH. In general, the set of extensions negotiated may depend on whether ECH was accepted.\r\n1. The client-facing server must not request client authentication when rejecting ECH, but the backend server may request client authentication when ECH was accepted.\r\n1. Whether or not an HRR message is issued by the server may depend on ECH acceptance.\r\n\r\nSome of these distinguishers can be mitigated by careful implementation, while mitigating others would require changes to the specification. (E.g., #353.) However, it's unlikely that _all_ implementations will mitigate _all_ of these distinguishers. Moreover, future extensions are likely to change the shape of TLS in a way that leads to yet more distinguishers.\r\n\r\nGiven all of this, I wonder if indistinguishability (of real-ECH from grease-ECH) is the right way to think about this problem. It seems to me that it's stronger than strictly necessary, since the existence of a distinguisher does not necessarily imply that some feature of real-ECH will trigger middlebox misbehavior that would not otherwise be triggered by grease-ECH. For example, while the outer SNI might be a dead give away of likely ECH usage, this value is unlikely to impact middlebox behavior. Similarly, the absence of the PSK extension in real-ECH is unlikely to cause issues.\r\n\r\nIf it were possible to enumerate the set of properties that impact middlebox behavior, then ensuring that middleboxes don't differentiate between real-ECH and grease-ECH may simply be a matter of ensuring that this set of properties does not vary. This approach would be roughly analogous to the design of \"Middlebox Compatibility Mode\" in TLS 1.3, which makes the handshake \"look like\" a particular mode of 1.2 that middleboxes are known to tolerate. Of course, a curious adversary (e.g., a censor) can easily distinguish between these, but experience suggests that middleboxes do not treat them differently.\r\n\r\nThis leaves us the daunting task of deciding what features are known to impact the behavior of existing middleboxes. Here's a preliminary list of things that might fit in this category. For the sake of discussion, let's call them **differentiable features**:\r\n1. The set of extensions that appear to be negotiated;\r\n1. Visible alerts, e.g., \"bad_record_mac\";\r\n1. Number of round trips in a given transport context (e.g., TCP connection);\r\n1. Packet size, or the number of packets comprising a single message;\r\n1. Timing;\r\n1. ...\r\n\r\nI think we should set the following goals for ECH-09.\r\n1. If we can agree on a set of differentiable features, then we should ensure that this set does not vary between real-ECH and grease-ECH.\r\n1. ECH-08 aims only to mitigate **passive** \"don't stick out\" attacks, but there is a lot of evidence that middleboxes exhibit **active** behavior. (For example, middleboxes have been observed removing CH extensions they don't recognize or adding their own.) Thus, we should aim to thwart attacks that change the set of differentiable features in real-ECH vs. grease-ECH. This includes @huitema's attack in particular: see #353.\r\n1. To the greatest extent possible, the spec should allow for implementations to aim for the strongest possible notion of security. For example, we might consider relaxing the requirement that the outer SNI matches ECHConfig.public_name, so long as this change doesn't impact interoperability.\r\n",
+      "body": "The primary \"don't stick out\" [RFC8744] consideration for ECH is to ensure that the new extension does not trigger middlebox misbehavior. To accomplish this, the draft specifies two protocol variants: in the \"real-ECH\" protocol the client offers the ECH extension, which is processed by the server; in the \"grease-ECH\" protocol, the client generates a dummy ECH extension, which is ignored or rejected by the server. Grease-ECH is designed to look enough like real-ECH so that middleboxes do not differentiate the latter from the former, the idea being that if grease-ECH can be deployed without triggering middlebox misbehavior, then real-ECH ought to be deployable, too.\r\n\r\nBut what do we mean when we say grease-ECH should \"look like\" real-ECH? In ECH-08 the stated goal is \"to hide, to some extent, **(a)** whether or not a specific server supports ECH and **(b)** whether or not ECH was accepted for a particular connection\" [ECH-08, [Sec.10.1](https://tools.ietf.org/html/draft-ietf-tls-esni-08#section-10.1)]. These goals are hard to meet. First, an attacker can violate **(a)** by simply running grease-ECH with the server to see if it returns retry configs. Second, there are a number of ways to distinguish real-ECH from grease-ECH, thereby violating **(b)**:\r\n1. @huitema's [client-reaction attack](https://mailarchive.ietf.org/arch/msg/tls/EAeKCNq7JAFm8DFaoe2MwSslZTQ/).\r\n1. If the ECH config is known to the attacker, then it can use ClientECH.config_id to distinguish real-ECH from grease-ECH. \r\n1. The outer SNI must match ECHConfig.public_name. Hence, for connections to a given backend server, the outer SNI will be different in real-ECH than in grease-ECH.\r\n1. The client and server must negotiate TLS 1.3 when ECH is accepted, but may otherwise negotiate an earlier version. In particular, it is valid for a client to run grease-ECH but not indicate support for 1.3.\r\n1. PSK must not be offered in the outer CH in real-ECH, but may be offered in grease-ECH. In general, the set of extensions negotiated may depend on whether ECH was accepted.\r\n1. The client-facing server must not request client authentication when rejecting ECH, but the backend server may request client authentication when ECH was accepted.\r\n1. Whether or not an HRR message is issued by the server may depend on ECH acceptance.\r\n1. There are a few active distinguisher attacks that exploit the HRR codepath.\r\n\r\nSome of these distinguishers can be mitigated by careful implementation, while mitigating others would require changes to the specification. (E.g., #353.) However, it's unlikely that _all_ implementations will mitigate _all_ of these distinguishers. Moreover, future extensions are likely to change the shape of TLS in a way that leads to yet more distinguishers.\r\n\r\nGiven all of this, I wonder if indistinguishability (of real-ECH from grease-ECH) is the right way to think about this problem. It seems to me that it's stronger than strictly necessary, since the existence of a distinguisher does not necessarily imply that some feature of real-ECH will trigger middlebox misbehavior that would not otherwise be triggered by grease-ECH. For example, while the outer SNI might be a dead give away of likely ECH usage, this value is unlikely to impact middlebox behavior. Similarly, the absence of the PSK extension in real-ECH is unlikely to cause issues.\r\n\r\nIf it were possible to enumerate the set of properties that impact middlebox behavior, then ensuring that middleboxes don't differentiate between real-ECH and grease-ECH may simply be a matter of ensuring that this set of properties does not vary. This approach would be roughly analogous to the design of \"Middlebox Compatibility Mode\" in TLS 1.3, which makes the handshake \"look like\" a particular mode of 1.2 that middleboxes are known to tolerate. Of course, a curious adversary (e.g., a censor) can easily distinguish between these, but experience suggests that middleboxes do not treat them differently.\r\n\r\nThis leaves us the daunting task of deciding what features are known to impact the behavior of existing middleboxes. Here's a preliminary list of things that might fit in this category. For the sake of discussion, let's call them **differentiable features**:\r\n1. The set of extensions that appear to be negotiated;\r\n1. Visible alerts, e.g., \"bad_record_mac\";\r\n1. Number of round trips in a given transport context (e.g., TCP connection);\r\n1. Packet size, or the number of packets comprising a single message;\r\n1. Timing;\r\n1. ...\r\n\r\nI think we should set the following goals for ECH-09.\r\n1. If we can agree on a set of differentiable features, then we should ensure that this set does not vary between real-ECH and grease-ECH.\r\n1. ECH-08 aims only to mitigate **passive** \"don't stick out\" attacks, but there is a lot of evidence that middleboxes exhibit **active** behavior. (For example, middleboxes have been observed removing CH extensions they don't recognize or adding their own.) Thus, we should aim to thwart attacks that change the set of differentiable features in real-ECH vs. grease-ECH. This includes @huitema's attack in particular: see #353.\r\n1. To the greatest extent possible, the spec should allow for implementations to aim for the strongest possible notion of security. For example, we might consider relaxing the requirement that the outer SNI matches ECHConfig.public_name, so long as this change doesn't impact interoperability.\r\n",
       "createdAt": "2020-11-03T01:28:48Z",
-      "updatedAt": "2020-11-03T15:20:04Z",
+      "updatedAt": "2020-11-04T19:06:35Z",
       "closedAt": null,
       "comments": []
+    },
+    {
+      "number": 356,
+      "id": "MDU6SXNzdWU3MzcyNzIzNzg=",
+      "title": "Clients should send consistent GREASE ECH extensions between CH1 and CH2",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/issues/356",
+      "state": "OPEN",
+      "author": "davidben",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "I'll try to put together a PR for this later, but filing this now so I don't forget. (@dmcardle FYI) The draft currently says you randomize this both times, which won't work.\r\n\r\nAlso \"MUST check the extension syntactically\" appears to have been a little ambiguous, since how deeply you parse ECHConfigs gets a little complicated. I'll adjust that too.",
+      "createdAt": "2020-11-05T21:12:25Z",
+      "updatedAt": "2020-11-06T17:34:34Z",
+      "closedAt": null,
+      "comments": [
+        {
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "> I'll try to put together a PR for this later, but filing this now so I don't forget. (@dmcardle FYI) The draft currently says you randomize this both times, which won't work.\r\n\r\nWhat fields are suggesting to not randomize?",
+          "createdAt": "2020-11-06T15:59:55Z",
+          "updatedAt": "2020-11-06T15:59:55Z"
+        },
+        {
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "`cipher_suite`. The draft doesn't quite say to randomize it, but it does say to vary it. (I'm not sure that's correct, actually. It depends on how much variation to expect in server ECHConfigs. If everyone does the AES-GCM / ChaCha20 pair, as they should, then the client will always pick one matching its cipher preference.)\r\n\r\nAdditionally, after #352, `enc` also should not be re-randomized on CH2.",
+          "createdAt": "2020-11-06T16:07:00Z",
+          "updatedAt": "2020-11-06T16:07:17Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "@davidben what is the concern here?",
+          "createdAt": "2020-11-06T17:21:52Z",
+          "updatedAt": "2020-11-06T17:21:52Z"
+        },
+        {
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "Just that GREASE and ECH should be consistent in which fields get copied over and the text doesn't say that right now.",
+          "createdAt": "2020-11-06T17:34:34Z",
+          "updatedAt": "2020-11-06T17:34:34Z"
+        }
+      ]
     }
   ],
   "pulls": [
@@ -26911,7 +26984,7 @@
       "labels": [],
       "body": "Closes #233.\r\n\r\nThis is limited to parameters applicable to TLS 1.3 and beyond. For example,\r\nTLS 1.2 ciphersuites may appear in ClientHelloOuter, so long as all TLS 1.3\r\nciphersuites in ClientHelloOuter match that in ClientHelloInner.\r\n\r\ncc @davidben, @cjpatton",
       "createdAt": "2020-09-30T23:25:50Z",
-      "updatedAt": "2020-11-02T16:33:19Z",
+      "updatedAt": "2020-11-03T22:30:24Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
       "baseRefOid": "6e359b6dcf7e20511cf28052005151fc804037d2",
@@ -26929,6 +27002,27 @@
           "body": "@cjpatton, @davidben, @martinthomson: this is ready for another look.",
           "createdAt": "2020-10-22T00:53:18Z",
           "updatedAt": "2020-10-22T00:53:18Z"
+        },
+        {
+          "author": "ekr",
+          "authorAssociation": "COLLABORATOR",
+          "body": "I'm not totally sure this is the right outcome. I can imagine situations where you might want CHOuter and CHInner to be different. I wonder if we can use a similar PRF() trick for HRR to tell which one it was, though I appreciate that this is in conflict with folding the secret into random.\r\n\r\n",
+          "createdAt": "2020-11-03T21:14:41Z",
+          "updatedAt": "2020-11-03T21:14:41Z"
+        },
+        {
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "I think there're three issues we'd want to sort out, to allow a mismatch.\r\n1. Without an ECH acceptance signal in HRR, the error gets deferred and that seems like a huge mess. I think this is the issue you have in mind with the PRF trick?\r\n2. If the HRR matches CHInner and is inconsistent with CHOuter, we still need to construct *some* CHOuter. The current draft says you don't follow the RFC8446 rules, but that can't be right because we need the cookie to appear in CHOuter even if CHOuter can't be constructed.\r\n3. Even if a mismatch is allowed, I think we should have text encouraging a match, so implementers know to avoid a complexity cliff if they don't need it.\r\n\r\n(It's also possible this would interact with #333, if we want some goofy HRRInner vs HRROuter scheme...)",
+          "createdAt": "2020-11-03T21:22:10Z",
+          "updatedAt": "2020-11-03T21:22:36Z"
+        },
+        {
+          "author": "ekr",
+          "authorAssociation": "COLLABORATOR",
+          "body": "Yes, I am trying to fix #1 with the PRF trick.\r\n\r\nAnd yes, there is some possibility of a goofy HRRInner/HRROuter\r\n\r\n",
+          "createdAt": "2020-11-03T22:30:23Z",
+          "updatedAt": "2020-11-03T22:30:23Z"
         }
       ],
       "reviews": [
@@ -30616,24 +30710,26 @@
       "id": "MDExOlB1bGxSZXF1ZXN0NTA3NzAwODU3",
       "title": "Clarify client and server roles",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/350",
-      "state": "OPEN",
+      "state": "MERGED",
       "author": "cjpatton",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
       "labels": [],
       "body": "Partially addresses #348.\r\n\r\nWhether the client offers ECH or sends GREASE ECH depends on whether it\r\ncan find a suitable ECH config. Whether the server acts like the\r\nclient-facing server or the backend server depends on whether it has\r\ncustody of a set of ECH configs. This change clarifies these decision\r\nmaking processes.\r\n\r\nAs a bonus, this change also cleans up the section titles and levels a bit.",
       "createdAt": "2020-10-21T16:34:41Z",
-      "updatedAt": "2020-11-02T21:37:43Z",
+      "updatedAt": "2020-11-03T21:03:42Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
       "baseRefOid": "6e359b6dcf7e20511cf28052005151fc804037d2",
       "headRepository": "cjpatton/draft-ietf-tls-esni",
       "headRefName": "client-server-roles",
       "headRefOid": "b9aa266c7531e0db9c82c25bce99ec59230925d8",
-      "closedAt": null,
-      "mergedAt": null,
-      "mergedBy": null,
-      "mergeCommit": null,
+      "closedAt": "2020-11-03T21:03:42Z",
+      "mergedAt": "2020-11-03T21:03:42Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "384dc60929a56d5f743e1345ac5438a6607a19fc"
+      },
       "comments": [
         {
           "author": "cjpatton",
@@ -31010,6 +31106,19 @@
           "createdAt": "2020-11-02T21:37:43Z",
           "updatedAt": "2020-11-02T21:37:43Z",
           "comments": []
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIyODcwMDA0",
+          "commit": {
+            "abbreviatedOid": "b9aa266"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-03T20:59:45Z",
+          "updatedAt": "2020-11-03T20:59:45Z",
+          "comments": []
         }
       ]
     },
@@ -31018,24 +31127,26 @@
       "id": "MDExOlB1bGxSZXF1ZXN0NTEyNzMyMDgx",
       "title": "Rearrange the server HRR text.",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/351",
-      "state": "OPEN",
+      "state": "MERGED",
       "author": "davidben",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
       "labels": [],
       "body": "Now that we have separate client HRR and server HRR sections, move some\r\nserver text to the server section. Also clarify that the second\r\nClientHelloOuterAAD is computed from the second ClientHelloOuter, not\r\nreusing the first value.\r\n\r\n(Some cleanup in advance of writing up the HPKE context reuse version.)",
       "createdAt": "2020-10-30T03:23:49Z",
-      "updatedAt": "2020-11-03T20:33:11Z",
+      "updatedAt": "2020-11-03T20:53:55Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
       "baseRefOid": "6e359b6dcf7e20511cf28052005151fc804037d2",
       "headRepository": "davidben/draft-ietf-tls-esni",
       "headRefName": "hrr-server-fixup",
       "headRefOid": "f4808ac2f3e75eff57fa5c9e300a438d4ff7d964",
-      "closedAt": null,
-      "mergedAt": null,
-      "mergedBy": null,
-      "mergeCommit": null,
+      "closedAt": "2020-11-03T20:53:55Z",
+      "mergedAt": "2020-11-03T20:53:55Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "30ee958bfeb419cf8dffc1d3849c206d40ec6c2b"
+      },
       "comments": [],
       "reviews": [
         {
@@ -31049,6 +31160,19 @@
           "body": "Can we merge this? The number of PRs is getting confusing.\r\n\r\n@chris-wood ",
           "createdAt": "2020-11-03T20:33:11Z",
           "updatedAt": "2020-11-03T20:33:11Z",
+          "comments": []
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIyODY2MTU4",
+          "commit": {
+            "abbreviatedOid": "f4808ac"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-03T20:53:51Z",
+          "updatedAt": "2020-11-03T20:53:51Z",
           "comments": []
         }
       ]
@@ -31065,18 +31189,75 @@
       "labels": [],
       "body": "(Note: this PR sits on top of #351, though hopefully the combined diff is also readable enough.)\r\n\r\nCloses #349. This achieves the same security properties of ech_hrr_key, but gives us a few improvements:\r\n\r\n- Client-facing servers that offload their HPKE operations to RPCs do not need to worry about race conditions with rotation between the two ClientHellos. (See #325.)\r\n\r\n- We only perform one addition asymmetric operation with ECH, rather than sometimes two. For servers with offloaded ECH keys, this also avoids an extra RPC call.\r\n\r\n- HPKE implementations for ECH only need SetupBase* and not SetupPSK*.\r\n\r\n- The description of HRR handling in general can be greatly simplified. Rather than running the server's CH1 algorithm with various modifications, we can just write a straightforward, simpler algorithm.\r\n\r\nThis PR also adds some missing text for GREASE on HRR. (Although it's worth noting that HRR connections can be easily distinguished by an active attacker anyway. This PR doesn't change this, but makes it much clearer.)",
       "createdAt": "2020-10-30T04:39:21Z",
-      "updatedAt": "2020-11-02T19:44:45Z",
+      "updatedAt": "2020-11-06T16:51:42Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
-      "baseRefOid": "6e359b6dcf7e20511cf28052005151fc804037d2",
+      "baseRefOid": "3b2b8cd7e8c10fadcd79e087238d67e44048584f",
       "headRepository": "davidben/draft-ietf-tls-esni",
       "headRefName": "hrr-reuse-context",
-      "headRefOid": "fb1bcea1834439d099f7021a106e1fdcb7d7d7a8",
+      "headRefOid": "b4137af001638e5114aff0417cb5039a86d39df3",
       "closedAt": null,
       "mergedAt": null,
       "mergedBy": null,
       "mergeCommit": null,
-      "comments": [],
+      "comments": [
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "This is much simpler, but, if I understand it correctly, I think it *might* be a little bit of a regression. The previous export-then-inject design forced the server to process both ECH configs and encapsulated keys in both CH1 and CH2, whereas here the server just ignores those in CH2 and uses the values from CH1. That lets clients change these fields in CH2 without any effect. Now, I don't really know of anything that *could* go wrong here, but it smells like the sort of \"insufficient binding\" problem we've continually run into before. (For example, I think an on-path attacker could modify the `enc` or `config_id` fields in CH2, without touching anything else. Decryption would succeed, as the server used CH1's `enc` value, and the transcript is unaffected since the server would choose the CH inner value. Is that a way for an on-path attacker to quickly check if the connection is real or fake ECH?)\r\n\r\nChris asked if we should require servers to verify these match, and as you pointed out, that's a mess. (We also acknowledged that servers missing these checks is something we should expect to happen in the wild, which is somewhat why we are concerned about this re-binding attack in the first place.)\r\n\r\nI wonder if we can solve this in a different way: [put these ECH extension fields in the AAD](https://github.com/tlswg/draft-ietf-tls-esni/issues/326). That would prevent the modification above, I think, and shouldn't be *too* bad in terms of additional complexity.",
+          "createdAt": "2020-11-04T01:08:50Z",
+          "updatedAt": "2020-11-04T01:08:50Z"
+        },
+        {
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "> This is much simpler, but, if I understand it correctly, I think it might be a little bit of a regression. The previous export-then-inject design forced the server to process both ECH configs and encapsulated keys in both CH1 and CH2, whereas here the server just ignores those in CH2 and uses the values from CH1. That lets clients change these fields in CH2 without any effect. Now, I don't really know of anything that could go wrong here, but it smells like the sort of \"insufficient binding\" problem we've continually run into before.\r\n\r\nI think allowing the actual client to change ignored fields is a general property of HelloRetryRequest. Because we don't expect servers to check consistency between CH1 and CH2, a client that goes out of their way to send something inconsistent may find that their (CH1, CH2) tuple is interpreted ambiguously. But the transcript reflects the whole tuple, so, as far as the handshake itself, the client is just causing its own preferences to be misrepresented here.\r\n\r\nIdeally ambiguous things would be unrepresentable and consistently treated as errors but HRR is what it is. :-/\r\n\r\n> (For example, I think an on-path attacker could modify the enc or config_id fields in CH2, without touching anything else. Decryption would succeed, as the server used CH1's enc value, and the transcript is unaffected since the server would choose the CH inner value. Is that a way for an on-path attacker to quickly check if the connection is real or fake ECH?)\r\n\r\nI think real vs. fake ECH on HRR connections is entirely hopeless, short of completely redoing HRR. If CH1 uses ECH, we need to require CH2 also use ECH. That means ECH decryption failures in CH2 are fatal, and you can distinguish the two by simply replaying CH1 and perturbing the ciphertext in CH2. (That said, note that CHOuterAAD means whether a ClientHello triggers HRR is not under attacker control. So if a client/server pair doesn't trigger HRR, the attacker can't try to do this.)\r\n\r\nThat said, I think there's a variant of this on CH1 in the optional config_id mode. (See below.)\r\n\r\n> Chris asked if we should require servers to verify these match, and as you pointed out, that's a mess. (We also acknowledged that servers missing these checks is something we should expect to happen in the wild, which is somewhat why we are concerned about this re-binding attack in the first place.)\r\n\r\nYeah, this is the \"I think we got HRR wrong and have to live with it\" problem. :-)\r\n\r\n> I wonder if we can solve this in a different way: put these ECH extension fields in the AAD. That would prevent the modification above, I think, and shouldn't be too bad in terms of additional complexity.\r\n\r\nI don't think I believe this matters for HRR (only attack I can see is real vs fake ECH, which is hopeless with HRR anyway), but now that you mention it, I think there *is* a variant of this for the optional config_id mode in the non-HRR case.\r\n\r\nIn CH1, we don't bind config_id, enc, and cipher_suite to the encryption, so a priori an attacker might be able to perturb them without breaking the decryption. Perturbing enc and cipher_suite seems likely to break decryption anyway, but config_id is interesting. In the normal mode, it too will break decryption. In the optional config_id mode, config_id is just a placeholder. That means an attacker can distinguish optional config_id ECH from {GREASE or config_id ECH} by flipping the config_id, sending it to the server, and seeing if the client can decrypt the result.\r\n\r\n(Of course, all this is relative to an unclear and undefined \"don't stick out\" model.)\r\n\r\nComplexity-wise, I think it's fine, but note it changes the processing order somewhat interestingly, both for the spec and implementations. Right now the spec says:\r\n\r\n1. Make your CHInner. This should largely be running through your usual CH assembly logic.\r\n2. Encode it with the extensions you expect to compress.\r\n3. Make your CHOuter, minus the ECH extension. This should largely run through your existing CH assembly logic and computes CHOuterAAD.\r\n4. Take EncodedCHInner and CHOuterAAD and run through the Deserialize, SetupBaseS, context.Seal logic to assemble the final CHOuter.\r\n\r\nIn order to put these fields in AAD, we'd need to say:\r\n\r\n1. Make your CHInner. This should largely be running through your usual CH assembly logic.\r\n2. Encode it with the extensions you expect to compress.\r\n3. Make your CHOuter, minus the ECH extension. This should largely run through your existing CH assembly logic.\r\n4. Run Deserialize and SetupBaseS.\r\n5. Compute CHOuterAAD with half an ECH extension.\r\n6. Take EncodedCHInner and CHOuterAAD and run through the context.Seal logic to assemble the final CHOuter.",
+          "createdAt": "2020-11-04T16:10:11Z",
+          "updatedAt": "2020-11-04T16:16:41Z"
+        },
+        {
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "> In CH1, we don't bind config_id, enc, and cipher_suite to the encryption, so a priori an attacker might be able to perturb them without breaking the decryption. Perturbing enc and cipher_suite seems likely to break decryption anyway, but config_id is interesting. In the normal mode, it too will break decryption. In the optional config_id mode, config_id is just a placeholder. That means an attacker can distinguish optional config_id ECH from {GREASE or config_id ECH} by flipping the config_id, sending it to the server, and seeing if the client can decrypt the result.\r\n\r\nA similar \"don't stick out\" distinguisher: Flip a bit of ClientECH.payload in CH2. The client-facing server will abort with \"decrypt_error\" if real-ECH is in use but not if grease-ECH is in use. This attack is unavoidable if we want to ensure that the server doesn't change from CHInner to CHOuter across the HRR. (Enforcing this invariant seems like a good idea to me.)\r\n\r\n> In order to put these fields in AAD, we'd need to say:\r\n> -    Make your CHInner. This should largely be running through your usual CH assembly logic.\r\n> -    Encode it with the extensions you expect to compress.\r\n> -    Make your CHOuter, minus the ECH extension. This should largely run through your existing CH assembly logic.\r\n> -    Run Deserialize and SetupBaseS.\r\n> -    Compute CHOuterAAD with half an ECH extension.\r\n> -    Take EncodedCHInner and CHOuterAAD and run through the context.Seal logic to assemble the final CHOuter.\r\n\r\nThis seems like a sensible idea, although I'm not super concerned about the \"don't stick out\" attack it mitigates. I would vote we land this change as-is and follow up with a new PR.",
+          "createdAt": "2020-11-04T19:09:02Z",
+          "updatedAt": "2020-11-04T19:22:46Z"
+        },
+        {
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "Right, I mentioned that HRR attack above. ( \"I think real vs. fake ECH on HRR connections is entirely hopeless [...]\".)\r\n\r\nSince avoiding this is hopeless in HRR, I don't think we should use it as a justification for binding bits of CH2's ClientECH or checking they match (which don't actually do the same thing). Whereas attacks on CH1 are interesting because that situation is less obviously hopeless. So maybe we want to add more things to CHOuterAAD for that, though that is orthogonal to this PR, so I think we should deal with it separately. (CHOuterAAD was originally intended to fix the ClientHello malleability attack, in a way that avoids burning 32 bytes on an inner_digest.)",
+          "createdAt": "2020-11-04T19:22:43Z",
+          "updatedAt": "2020-11-04T19:23:38Z"
+        },
+        {
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "Agreed. (I was in the middle of editing my comment above to say the same thing when I saw your message!)",
+          "createdAt": "2020-11-04T19:24:01Z",
+          "updatedAt": "2020-11-04T19:24:01Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": ">This attack is unavoidable if we want to ensure that the server doesn't change from CHInner to CHOuter across the HRR. \r\n\r\nYeah, this morning I came to the conclusion that mitigating this sort of distinguisher for HRR was not really possible unless we relax the inner/outer matching invariant. I'm fine pursuing more AAD as a separate change on top of this, since it's strictly an improvement (and HRR is hopeless).",
+          "createdAt": "2020-11-04T19:31:00Z",
+          "updatedAt": "2020-11-04T19:31:00Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "@davidben can you please resolve conflicts?",
+          "createdAt": "2020-11-04T19:31:09Z",
+          "updatedAt": "2020-11-04T19:31:09Z"
+        },
+        {
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "Rebased.",
+          "createdAt": "2020-11-04T19:46:46Z",
+          "updatedAt": "2020-11-04T19:46:46Z"
+        }
+      ],
       "reviews": [
         {
           "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIwMzcyNjEw",
@@ -31094,7 +31275,7 @@
               "originalPosition": 58,
               "body": "This fields also don't matter. I wonder if we should say you empty them instead...\r\n\r\n(Insert usual remark that I think we got HelloRetryRequest wrong. :-) )",
               "createdAt": "2020-10-30T04:40:04Z",
-              "updatedAt": "2020-10-30T04:40:04Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31114,7 +31295,7 @@
               "originalPosition": 138,
               "body": "Self-review: \"After sending a HelloRetryRequest\" is slightly odd because, on ECH accept, the client-facing server forwards the HRR from the backend server. At the same time, this section also talks about ECH reject, since we want to clarify that you don't process ECH on the second ClientHello as usual.\r\n\r\nPerhaps: \"After sending or forwarding a HelloRetryRequest\"?",
               "createdAt": "2020-10-30T20:57:48Z",
-              "updatedAt": "2020-10-30T20:57:48Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31134,7 +31315,7 @@
               "originalPosition": 58,
               "body": "They need to be present in order for stateless-HRR servers to correctly re-compute the HPKE context, right? Incidentally, how do stateless-HRR servers correctly compute the nonce? The sequence number changes after HRR.\r\n\r\nPerhaps this PR should stipulate that (some representation of) the HPKE context ought to appear in the \"cooke\".",
               "createdAt": "2020-11-02T17:17:37Z",
-              "updatedAt": "2020-11-02T17:20:55Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31154,7 +31335,7 @@
               "originalPosition": 58,
               "body": "Stateless-HRR servers don't work at all right now anyway (#333), so we can't really talk about what goes in the cookie because there's no way for the client-facing server to contribute to the cookie right now. When we do, yes, we should say something about this. (See also https://github.com/tlswg/draft-ietf-tls-esni/issues/349#issuecomment-713724970)\r\n\r\nAs to what the stateless-HRR server needs, it needs to store *something* that allows it to recreate the HPKE context on the second ClientHello. Things that would work:\r\n\r\n* Store the HPKE encryption key, nonce, and sequence number. (Alternatively, know the sequence number is always 1...)\r\n* Store the client `enc` value and sequence number (or assume 1), and some handle to the ECHConfig private key, so it can recreate the HPKE context and fast-forward the context to the right sequence number.\r\n* Store a hash of the client `enc` value, check it matches, and then do as above.\r\n\r\nOnly the last of these actually needs the client to send `enc` again. Note what would not work great is blindly recomputing the `enc` value, given {{flow-hrr-hijack}}. Given #325, my inclination is the first option is most straightforward anyway.",
               "createdAt": "2020-11-02T17:28:04Z",
-              "updatedAt": "2020-11-02T17:28:04Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31174,7 +31355,7 @@
               "originalPosition": 58,
               "body": "> Stateless-HRR servers don't work at all right now anyway (#333), so we can't really talk about what goes in the cookie because there's no way for the client-facing server to contribute to the cookie right now.\r\n\r\nIsn't this only true for Split Mode / stateless-HRR? \r\n",
               "createdAt": "2020-11-02T17:53:22Z",
-              "updatedAt": "2020-11-02T17:53:22Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31194,7 +31375,7 @@
               "originalPosition": 138,
               "body": "That sounds good to me.",
               "createdAt": "2020-11-02T18:06:49Z",
-              "updatedAt": "2020-11-02T18:06:49Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31214,7 +31395,7 @@
               "originalPosition": 131,
               "body": "As long as \"cipher_suite\", \"config_id\", \"enc\" are retransmitted in CH2, should the server verify that they don't change?",
               "createdAt": "2020-11-02T18:19:21Z",
-              "updatedAt": "2020-11-02T18:19:22Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31234,7 +31415,7 @@
               "originalPosition": 58,
               "body": "It's true for both. There's no text supporting Shared Mode / stateless-HRR right now because Shared Mode is treated as a special-case of Split Mode. It's \"obvious\" what they're supposed to do, but without any text to support it, we can't talk about what goes in the cookie.\r\n\r\nAs part of #333, we'll need to address all of that. In the meantime, this PR doesn't change things because we already have no text talking about how ech_hrr_key goes in the cookie. All of that is #333.",
               "createdAt": "2020-11-02T19:07:35Z",
-              "updatedAt": "2020-11-02T19:07:35Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31254,7 +31435,7 @@
               "originalPosition": 131,
               "body": "Checking CH1 and CH2 consistency is a huge mess to do. We completely got the design of HRR wrong in RFC8446, and it's too late to do anything about that now. Rather than expend a whole lot of energy on everyone's part, from spec text to implementations to constantly having this discussion, I'd rather we follow RFC8446's example here and leave it alone.",
               "createdAt": "2020-11-02T19:09:47Z",
-              "updatedAt": "2020-11-02T19:09:47Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31274,7 +31455,7 @@
               "originalPosition": 131,
               "body": "That is, RFC8446 is already quite restrictive about CH1/CH2 consistency, yet servers are not required to (and in practice do not) check consistency for much, if any, of it.\r\nhttps://tools.ietf.org/html/rfc8446#section-4.1.2\r\n\r\nIndeed if you think about what a server would need to do here, it's clear we just got the design wrong. A server that is capable of checking some individual field most likely stored the value of the field, in which case there was no reason for the client to re-send it in the first place! (This grew organically from an earlier design where the server actually reconstructed CH1 from CH2, but that had all kinds of attacks and was generally a mess. When we dropped that, we probably should have stopped to reevaluate it. Oh well.)",
               "createdAt": "2020-11-02T19:16:29Z",
-              "updatedAt": "2020-11-02T19:16:29Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
             }
           ]
         },
@@ -31294,7 +31475,232 @@
               "originalPosition": 58,
               "body": "Ack. You can resolve this comment.",
               "createdAt": "2020-11-02T19:44:44Z",
-              "updatedAt": "2020-11-02T19:44:45Z"
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIyODczNTcy",
+          "commit": {
+            "abbreviatedOid": "fb1bcea"
+          },
+          "author": "ekr",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "This seems generally good. I'm not sure why we didn't do this in the first place. Are reusable contexts new?",
+          "createdAt": "2020-11-03T21:05:32Z",
+          "updatedAt": "2020-11-03T21:06:56Z",
+          "comments": [
+            {
+              "originalPosition": 131,
+              "body": "This seems like it's orthogonal, right?",
+              "createdAt": "2020-11-03T21:05:33Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIyODg3NDkw",
+          "commit": {
+            "abbreviatedOid": "fb1bcea"
+          },
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-03T21:28:57Z",
+          "updatedAt": "2020-11-03T21:28:57Z",
+          "comments": [
+            {
+              "originalPosition": 131,
+              "body": "Well, the question is whether we mandate the server check the redundant fields. I think my default is to prefer matching rfc8446 in not saying much. (With a side of grumpiness about how weird HRR is. :-) ) We probably need to do a better job describing HRR in rfc8446bis. I figure the less other specs say about it, the more room we have to figure out what we actually want to require.",
+              "createdAt": "2020-11-03T21:28:57Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIyOTY4NTk3",
+          "commit": {
+            "abbreviatedOid": "fb1bcea"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T00:31:36Z",
+          "updatedAt": "2020-11-04T13:38:51Z",
+          "comments": [
+            {
+              "originalPosition": 138,
+              "body": "```suggestion\r\nAfter sending or forwarding a HelloRetryRequest, the client-facing server does not repeat the\r\n```",
+              "createdAt": "2020-11-04T00:31:37Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            },
+            {
+              "originalPosition": 140,
+              "body": "(Assuming this is what you meant...)\r\n\r\n```suggestion\r\ncontinues with the ECHConfig selection from the first ClientHelloOuter as follows:\r\n```",
+              "createdAt": "2020-11-04T00:40:38Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            },
+            {
+              "originalPosition": 165,
+              "body": "```suggestion\r\nproceeds with the connection as usual, without decrypting the new\r\n```",
+              "createdAt": "2020-11-04T00:48:58Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzNTE2NTU5",
+          "commit": {
+            "abbreviatedOid": "fb1bcea"
+          },
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T16:15:12Z",
+          "updatedAt": "2020-11-04T16:15:12Z",
+          "comments": [
+            {
+              "originalPosition": 165,
+              "body": "Hrm. I wrote \"any\" so that this text also works for the no ECH extension case and the \"if any\" version had lots of clauses and commas. :-)\r\n\r\n> If the client-facing server rejected ECH, or if the first ClientHello did not\r\n> include an \"encrypted_client_hello\" extension, the client-facing server\r\n> proceeds with the connection as usual, without decrypting the new\r\n> ClientECH.payload value, if any.\r\n\r\nGiven that, are you happy with \"any new ClientECH.payload value\"? Or do you prefer \", if any\" or maybe some other wording altogether?",
+              "createdAt": "2020-11-04T16:15:12Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzNTMwMDM4",
+          "commit": {
+            "abbreviatedOid": "3790580"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T16:29:04Z",
+          "updatedAt": "2020-11-04T16:29:05Z",
+          "comments": [
+            {
+              "originalPosition": 165,
+              "body": "\"Any\" to me implied \"possibly one of the many new values,\" but the CH only has one value.",
+              "createdAt": "2020-11-04T16:29:05Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzNTYwNDIz",
+          "commit": {
+            "abbreviatedOid": "3790580"
+          },
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T17:02:18Z",
+          "updatedAt": "2020-11-04T17:02:19Z",
+          "comments": [
+            {
+              "originalPosition": 165,
+              "body": "Hehe. I read \"any ClientECH.payload value [singular]\" to mean zero or one, but maybe that's not the right way to use that word. :-)\r\n\r\nHow about:\r\n\r\n> If the client-facing server rejected ECH, or if the first ClientHello did not\r\n> include an \"encrypted_client_hello\" extension, the client-facing server\r\n> proceeds with the connection as usual. The server does not decrypt the\r\n> second ClientHello's ClientECH.payload value, if one was included.",
+              "createdAt": "2020-11-04T17:02:18Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzNTY2MTEz",
+          "commit": {
+            "abbreviatedOid": "3790580"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T17:08:55Z",
+          "updatedAt": "2020-11-04T17:08:55Z",
+          "comments": [
+            {
+              "originalPosition": 165,
+              "body": "Perfect!",
+              "createdAt": "2020-11-04T17:08:55Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzNjI1NTM1",
+          "commit": {
+            "abbreviatedOid": "d1db526"
+          },
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T18:25:12Z",
+          "updatedAt": "2020-11-04T18:25:13Z",
+          "comments": [
+            {
+              "originalPosition": 165,
+              "body": "Reworded.",
+              "createdAt": "2020-11-04T18:25:12Z",
+              "updatedAt": "2020-11-04T19:46:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzNjY4MjM0",
+          "commit": {
+            "abbreviatedOid": "d1db526"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-04T19:24:49Z",
+          "updatedAt": "2020-11-04T19:24:49Z",
+          "comments": []
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTI1MzE0ODgy",
+          "commit": {
+            "abbreviatedOid": "fb1bcea"
+          },
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-06T16:36:55Z",
+          "updatedAt": "2020-11-06T16:36:55Z",
+          "comments": [
+            {
+              "originalPosition": 58,
+              "body": "Unresolving this since we only resolved @cjpatton's clarification question, not the actual issue.\r\n\r\nThinking about this some more, I think we actually should require `enc` be empty on CH2. The reason is, of the three stateless implementation options listed above, only the first one is robust. The second and third rely on the server performing a check that, if they forget, still interops. But if they forget the check, {{flow-hrr-hijack}} applies again. Given @cjpatton's question, I also suspect this mistake is reasonably likely.\r\n\r\nClearing `enc` forces servers to pick the first option, which is the more robust one. We're also guaranteed that a server, stateful or stateless, does not need `enc` (or `cipher_suite`) because you need to process ECH on CH1 regardless. Thus, I propose:\r\n\r\n* CH2's `enc` MUST be empty. Servers check this when parsing (now that it's empty rather than copied over, it's easy).\r\n* CH2's  `cipher_suite` MUST be {copied over, zero; not sure which}. Servers check this one too, just because it's really easy.\r\n\r\nEven more minimal would be if CH2's extension contained `payload` and nothing else, but we don't have any precedent for extension syntaxes varying between CH1 and CH2, so probably we shouldn't go down that route.\r\n\r\n@ekr, I'm curious what your thoughts on this are.",
+              "createdAt": "2020-11-06T16:36:55Z",
+              "updatedAt": "2020-11-06T16:39:17Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTI1MzI1NTYz",
+          "commit": {
+            "abbreviatedOid": "b4137af"
+          },
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-06T16:50:35Z",
+          "updatedAt": "2020-11-06T16:50:35Z",
+          "comments": [
+            {
+              "originalPosition": 58,
+              "body": "Oh same probably goes for `config_id` in CH2. Force the server to use the same ECHConfig rather than accidentally swapping it. (Except it's not really using the ECHConfig since it's just reusing the HPKE context and not worrying about it.)",
+              "createdAt": "2020-11-06T16:50:35Z",
+              "updatedAt": "2020-11-06T16:51:42Z"
             }
           ]
         }
@@ -31310,15 +31716,15 @@
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
       "labels": [],
-      "body": "(Based on #350. Limit your review to the last commit.)\r\n\r\n[Originally suggested by Karthik Bhargavan](https://mailarchive.ietf.org/arch/msg/tls/XsWf4f7-apwOlehe4j0_qKB3zV4/), this change mitigates an active \"don't stick out\" attack [pointed out by Christian Huitema](https://mailarchive.ietf.org/arch/msg/tls/EAeKCNq7JAFm8DFaoe2MwSslZTQ/). The attack is as follows.\r\n\r\n```\r\nClient                       Attacker             Server\r\nCH\r\n +encrypted_client_hello\r\n +key_share (g^x)        --> CH -->               SH\r\n                                                   +key_share (g^y)\r\n                             SH'              <-- EE\r\n                              +key_share (g^a)\r\n                         <-- EE'\r\n```\r\n\r\n1. The attacker intercepts the client's first flow (`CH`) and forwards it to the\r\n   server.\r\n2. The attacker intercepts the server's first flow and transforms `SH` and `EE` into\r\n   `SH'` and `EE'` respectively, as follows. `SH'` is just like `SH` except that the\r\n   key share `g^y` is replaced with key share `g^a`, where `a` is known to the\r\n   attacker. `EE'` is a malformed handshake message encrypted using a key derived\r\n   from `g^xa`. Finally, it sends `SH'..EE'` to the client.\r\n3. If the client aborts with a \"bad_record_mac\" alert, then the attacker guesses\r\n   that real-ECH was used. Otherwise, it guesses that grease-ECH was used.",
+      "body": "[Originally suggested by Karthik Bhargavan](https://mailarchive.ietf.org/arch/msg/tls/XsWf4f7-apwOlehe4j0_qKB3zV4/), this change mitigates an active \"don't stick out\" attack [pointed out by Christian Huitema](https://mailarchive.ietf.org/arch/msg/tls/EAeKCNq7JAFm8DFaoe2MwSslZTQ/). The attack is as follows.\r\n\r\n```\r\nClient                       Attacker             Server\r\nCH\r\n +encrypted_client_hello\r\n +key_share (g^x)        --> CH -->               SH\r\n                                                   +key_share (g^y)\r\n                             SH'              <-- EE\r\n                              +key_share (g^a)\r\n                         <-- EE'\r\n```\r\n\r\n1. The attacker intercepts the client's first flow (`CH`) and forwards it to the\r\n   server.\r\n2. The attacker intercepts the server's first flow and transforms `SH` and `EE` into\r\n   `SH'` and `EE'` respectively, as follows. `SH'` is just like `SH` except that the\r\n   key share `g^y` is replaced with key share `g^a`, where `a` is known to the\r\n   attacker. `EE'` is a malformed handshake message encrypted using a key derived\r\n   from `g^xa`. Finally, it sends `SH'..EE'` to the client.\r\n3. If the client aborts with a \"bad_record_mac\" alert, then the attacker guesses\r\n   that real-ECH was used. Otherwise, it guesses that grease-ECH was used.",
       "createdAt": "2020-11-02T21:46:35Z",
-      "updatedAt": "2020-11-03T20:31:42Z",
+      "updatedAt": "2020-11-04T19:27:04Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
-      "baseRefOid": "6e359b6dcf7e20511cf28052005151fc804037d2",
+      "baseRefOid": "3b2b8cd7e8c10fadcd79e087238d67e44048584f",
       "headRepository": "cjpatton/draft-ietf-tls-esni",
       "headRefName": "accept-binder",
-      "headRefOid": "198671e3d5c40707512daa3d0c6618320951f0db",
+      "headRefOid": "50506ef3c99ab65f6aa9a0c0fcd1c1340940031c",
       "closedAt": null,
       "mergedAt": null,
       "mergedBy": null,
@@ -31330,6 +31736,20 @@
           "body": "I have really mixed feelings about this. On the one hand, it's kind of annoying extra complexity. OTOH, given how hard a time we have had by reasoning about the security of ECH, I think better safe than sorry.",
           "createdAt": "2020-11-03T20:31:42Z",
           "updatedAt": "2020-11-03T20:31:42Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "@cjpatton can you please rebase this PR?",
+          "createdAt": "2020-11-04T01:11:41Z",
+          "updatedAt": "2020-11-04T01:11:41Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "@cjpatton this is nice -- thanks! I think the new type name for the special SH is fine, though if someone has an idea for a better name, let's consider it.",
+          "createdAt": "2020-11-04T13:38:15Z",
+          "updatedAt": "2020-11-04T13:38:15Z"
         }
       ],
       "reviews": [
@@ -31349,9 +31769,201 @@
               "originalPosition": 41,
               "body": "nit: s/.../../",
               "createdAt": "2020-11-03T01:26:56Z",
-              "updatedAt": "2020-11-03T01:26:56Z"
+              "updatedAt": "2020-11-04T19:27:04Z"
             }
           ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIyOTgwNTc4",
+          "commit": {
+            "abbreviatedOid": "198671e"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T01:12:02Z",
+          "updatedAt": "2020-11-04T01:12:03Z",
+          "comments": [
+            {
+              "originalPosition": 280,
+              "body": "```suggestion\r\nSection 7.1 and ClientHelloInner..ServerHelloECHConf refers to the sequence of\r\n```",
+              "createdAt": "2020-11-04T01:12:02Z",
+              "updatedAt": "2020-11-04T19:27:04Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzMzY0MjIx",
+          "commit": {
+            "abbreviatedOid": "ef03c58"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T13:35:40Z",
+          "updatedAt": "2020-11-04T13:35:41Z",
+          "comments": [
+            {
+              "originalPosition": 33,
+              "body": "```suggestion\r\n                      \"ech accept confirmation\",\r\n```",
+              "createdAt": "2020-11-04T13:35:40Z",
+              "updatedAt": "2020-11-04T19:27:04Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzMzY1NzAw",
+          "commit": {
+            "abbreviatedOid": "ef03c58"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T13:37:22Z",
+          "updatedAt": "2020-11-04T13:37:23Z",
+          "comments": [
+            {
+              "originalPosition": 27,
+              "body": "```suggestion\r\nThe backend server begins by generating a message ServerHelloECHConf, which is identical\r\nin content to a ServerHello message with the exception that ServerHelloECHConf.random is\r\n```",
+              "createdAt": "2020-11-04T13:37:22Z",
+              "updatedAt": "2020-11-04T19:27:04Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzMzc1OTQ0",
+          "commit": {
+            "abbreviatedOid": "ef03c58"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T13:49:30Z",
+          "updatedAt": "2020-11-04T13:49:30Z",
+          "comments": [
+            {
+              "originalPosition": 54,
+              "body": "The relevant text here notes that active attackers can distinguish real from fake ECH, which, as written, is probably still true with this change. (It could probe for the outer name, and then memcmp that to what's in a packet, for example.) So I might drop this TODO and address overhauling this section as part of #354.",
+              "createdAt": "2020-11-04T13:49:30Z",
+              "updatedAt": "2020-11-04T19:27:04Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIzNjQxMTkw",
+          "commit": {
+            "abbreviatedOid": "a90b642"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-04T18:46:29Z",
+          "updatedAt": "2020-11-04T18:46:29Z",
+          "comments": [
+            {
+              "originalPosition": 54,
+              "body": "Done.",
+              "createdAt": "2020-11-04T18:46:29Z",
+              "updatedAt": "2020-11-04T19:27:04Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 355,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTE1MDE0MjQ5",
+      "title": "Bump HPKE-05 to -06",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/355",
+      "state": "MERGED",
+      "author": "cjpatton",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "",
+      "createdAt": "2020-11-03T22:00:37Z",
+      "updatedAt": "2020-11-03T22:01:25Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "384dc60929a56d5f743e1345ac5438a6607a19fc",
+      "headRepository": "cjpatton/draft-ietf-tls-esni",
+      "headRefName": "hpke-06",
+      "headRefOid": "8f7646d3157fe0b7b8c8dd79b12dbff5c9aee7de",
+      "closedAt": "2020-11-03T22:01:25Z",
+      "mergedAt": "2020-11-03T22:01:25Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "3b2b8cd7e8c10fadcd79e087238d67e44048584f"
+      },
+      "comments": [],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTIyOTA2MTI3",
+          "commit": {
+            "abbreviatedOid": "8f7646d"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-03T22:01:21Z",
+          "updatedAt": "2020-11-03T22:01:21Z",
+          "comments": []
+        }
+      ]
+    },
+    {
+      "number": 357,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTE2OTIyMTk4",
+      "title": "Correcting incorrect integer equivalents for ECH and outer_extensions",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/357",
+      "state": "MERGED",
+      "author": "sudheesh001",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "Signed-off-by: Sudheesh Singanamalla <sudheesh@cloudflare.com>",
+      "createdAt": "2020-11-06T18:54:57Z",
+      "updatedAt": "2020-11-06T19:02:40Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "3b2b8cd7e8c10fadcd79e087238d67e44048584f",
+      "headRepository": "sudheesh001/draft-ietf-tls-esni",
+      "headRefName": "int_fixes",
+      "headRefOid": "06e3e2d2f7477bdf53bc44195f4a34168ee0cc71",
+      "closedAt": "2020-11-06T19:02:40Z",
+      "mergedAt": "2020-11-06T19:02:40Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "a70b9770debf7bc94570dd6250dbbb1929e1212f"
+      },
+      "comments": [
+        {
+          "author": "sudheesh001",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "@chris-wood This is ready for review.",
+          "createdAt": "2020-11-06T18:58:40Z",
+          "updatedAt": "2020-11-06T18:58:40Z"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTI1NDE3Mjc3",
+          "commit": {
+            "abbreviatedOid": "06e3e2d"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-06T19:02:35Z",
+          "updatedAt": "2020-11-06T19:02:35Z",
+          "comments": []
         }
       ]
     }
