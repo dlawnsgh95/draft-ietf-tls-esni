@@ -826,7 +826,7 @@ address div.right {
 </tr></thead>
 <tfoot><tr>
 <td class="left">Rescorla, et al.</td>
-<td class="center">Expires 10 May 2021</td>
+<td class="center">Expires 21 May 2021</td>
 <td class="right">[Page]</td>
 </tr></tfoot>
 </table>
@@ -839,12 +839,12 @@ address div.right {
 <dd class="internet-draft">draft-ietf-tls-esni-latest</dd>
 <dt class="label-published">Published:</dt>
 <dd class="published">
-<time datetime="2020-11-06" class="published">6 November 2020</time>
+<time datetime="2020-11-17" class="published">17 November 2020</time>
     </dd>
 <dt class="label-intended-status">Intended Status:</dt>
 <dd class="intended-status">Standards Track</dd>
 <dt class="label-expires">Expires:</dt>
-<dd class="expires"><time datetime="2021-05-10">10 May 2021</time></dd>
+<dd class="expires"><time datetime="2021-05-21">21 May 2021</time></dd>
 <dt class="label-authors">Authors:</dt>
 <dd class="authors">
 <div class="author">
@@ -891,7 +891,7 @@ encrypting a ClientHello message under a server public key.<a href="#section-abs
         time. It is inappropriate to use Internet-Drafts as reference
         material or to cite them other than as "work in progress."<a href="#section-boilerplate.1-3" class="pilcrow">¶</a></p>
 <p id="section-boilerplate.1-4">
-        This Internet-Draft will expire on 10 May 2021.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
+        This Internet-Draft will expire on 21 May 2021.<a href="#section-boilerplate.1-4" class="pilcrow">¶</a></p>
 </section>
 </div>
 <div id="copyright">
@@ -1756,8 +1756,8 @@ to be padded using TLS record layer padding.<a href="#section-6.1.1-5" class="pi
 ClientHelloInner or reject it and use ClientHelloOuter. In handling the server's
 response, the client's first step is to determine which value was used. The
 client presumes acceptance if the last 8 bytes of ServerHello.random are equal
-to <code>accept_confirmation</code> as defined in <a href="#backend-server" class="xref">Section 7.2</a>. Otherwise, it
-presumes rejection.<a href="#section-6.1.2-1" class="pilcrow">¶</a></p>
+to the first 8 bytes of <code>accept_confirmation</code> as defined in <a href="#backend-server" class="xref">Section 7.2</a>.
+Otherwise, it presumes rejection.<a href="#section-6.1.2-1" class="pilcrow">¶</a></p>
 <div id="accepted-ech">
 <section id="section-6.1.2.1">
             <h5 id="name-accepted-ech">
@@ -2049,22 +2049,29 @@ See issue #333.]]<a href="#section-7.1.1-6" class="pilcrow">¶</a></p>
 <a href="#section-7.2" class="section-number selfRef">7.2. </a><a href="#name-backend-server" class="section-name selfRef">Backend Server</a>
         </h3>
 <p id="section-7.2-1">Upon receipt of an empty "encrypted_client_hello" extension, if the backend
-server negotiates TLS 1.3 or higher, then it MUST confirm ECH acceptance by
-setting ServerHello.random[24:32] to<a href="#section-7.2-1" class="pilcrow">¶</a></p>
-<div class="artwork art-text alignLeft" id="section-7.2-2">
+server negotiates TLS 1.3 or higher, then it MUST confirm ECH acceptance to the
+client by computing its ServerHello as described here.<a href="#section-7.2-1" class="pilcrow">¶</a></p>
+<p id="section-7.2-2">The backend server begins by generating a message ServerHelloECHConf, which is
+identical in content to a ServerHello message with the exception that
+ServerHelloECHConf.random is equal to 24 random bytes followed by 8 zero bytes.
+It then computes a string<a href="#section-7.2-2" class="pilcrow">¶</a></p>
+<div class="artwork art-text alignLeft" id="section-7.2-3">
 <pre>
-    accept_confirmation = HKDF-Expand-Label(
-        HKDF-Extract(0, ClientHelloInner.random),
-        "ech accept confirmation",
-        ServerHello.random[0:24], 8)
-</pre><a href="#section-7.2-2" class="pilcrow">¶</a>
+    accept_confirmation =
+        Derive-Secret(Handshake Secret,
+                      "ech accept confirmation",
+                      ClientHelloInner..ServerHelloECHConf)
+</pre><a href="#section-7.2-3" class="pilcrow">¶</a>
 </div>
-<p id="section-7.2-3">where HKDF-Expand-Label and HKDF-Extract are as defined in <span>[<a href="#RFC8446" class="xref">RFC8446</a>]</span>. The
-value of ServerHello.random[0:24] is generated as usual by invoking a secure
-random number generator (see <span>[<a href="#RFC8446" class="xref">RFC8446</a>]</span>, Section 4.1.2).<a href="#section-7.2-3" class="pilcrow">¶</a></p>
-<p id="section-7.2-4">The backend server MUST NOT perform this operation if it negotiated TLS 1.2 or
+<p id="section-7.2-4">where Derive-Secret and Handshake Secret are as specified in <span>[<a href="#RFC8446" class="xref">RFC8446</a>]</span>,
+Section 7.1 and ClientHelloInner..ServerHelloECHConf refers to the sequence of
+handshake messages beginning with the first ClientHello and ending with
+ServerHelloECHConf. Finally, the backend server constructs its ServerHello
+message so that it is equal to ServerHelloECHConf but with the last 8 bytes of
+ServerHello.random set to the first 8 bytes of accept_confirmation.<a href="#section-7.2-4" class="pilcrow">¶</a></p>
+<p id="section-7.2-5">The backend server MUST NOT perform this operation if it negotiated TLS 1.2 or
 below. Note that doing so would overwrite the downgrade signal for TLS 1.3 (see
-<span>[<a href="#RFC8446" class="xref">RFC8446</a>]</span>, Section 4.1.3).<a href="#section-7.2-4" class="pilcrow">¶</a></p>
+<span>[<a href="#RFC8446" class="xref">RFC8446</a>]</span>, Section 4.1.3).<a href="#section-7.2-5" class="pilcrow">¶</a></p>
 </section>
 </div>
 </section>
