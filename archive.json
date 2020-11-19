@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-11-18T23:57:48.746680+00:00",
+  "timestamp": "2020-11-19T12:09:07.986175+00:00",
   "repo": "tlswg/draft-ietf-tls-esni",
   "labels": [
     {
@@ -4839,15 +4839,15 @@
       "id": "MDU6SXNzdWU2MTUzNDQ4NDk=",
       "title": "Trial decryption after HelloRetryRequest",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/issues/233",
-      "state": "OPEN",
+      "state": "CLOSED",
       "author": "ocheron",
       "authorAssociation": "NONE",
       "assignees": [],
       "labels": [],
       "body": "In a normal ECHO handshake with HelloRetryRequest there are 4 ClientHellos sent: ClientHelloOuter1, ClientHelloInner1, ClientHelloOuter2, ClientHelloInner2.\r\n\r\nEncryption of ClientHelloInner2 is bound to echo_hrr_key so the server must have the ECHOConfig used for ClientHelloInner1 in order to process ECHO the second time.\r\nAnd by the time the client receives encrypted handshake traffic it is not useful to signal if ClientHelloInner1 was successfully decrypted, what matters is to know if ECHO is globally successful or not.\r\n\r\nSo one aspect that I find not explained enough is whether the server replying with HRR should use ClientHelloInner1 in the transcript, or instead always takes ClientHelloOuter1 (data on the wire) regardless of the first decryption status. The ECHO status accept/reject can be conveyed based on distinction ClientHello2 inner/outer only.\r\n\r\nThis point impacts the number of transcripts the client may have to try, i.e. can be sure the combination (ClientHelloInner1, ClientHelloOuter2) is never valid.",
       "createdAt": "2020-05-10T08:39:16Z",
-      "updatedAt": "2020-10-16T17:15:06Z",
-      "closedAt": null,
+      "updatedAt": "2020-11-19T00:10:06Z",
+      "closedAt": "2020-11-19T00:10:06Z",
       "comments": [
         {
           "author": "cjpatton",
@@ -5581,7 +5581,7 @@
       ],
       "body": "ECH currently uses two different kinds of padding. The encrypted ClientHello is padded with the padding extension, while the server response is padded with TLS 1.3 record layer padding.\r\nhttps://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-07#section-7.1\r\nhttps://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-07#section-7.2\r\n\r\nUsing record-level padding in TLS over TCP is relatively straightforward as it\u2019s ordered. However DTLS and QUIC have their own record layers, with retransmission logic. Properly hiding some length then requires that packet loss and retransmission logic track and retransmit padding as if it were integrated into the byte stream.\r\n\r\nIn the case of QUIC, when a QUIC packet is determined to be lost, it is not retransmitted whole; instead information carried in the frames in lost packets might be sent again in new frames (draft-ietf-quic-transport, section 13.3). That same section states that PADDING frames do not need to be retransmitted. If ECH in QUIC relies on QUIC transport layer padding, that would need to be changed, and implementations would need to track how much adding is associated with CRYPTO frame data for retransmission.\r\n\r\nQUIC additionally needs the padding size communicated across API boundaries between the TLS and QUIC implementations. It\u2019s likely that everyone\u2019s first pass at the API will omit this, only to need to add an extra parameter (API change) later when they implement ECH.\r\n\r\nThis seems a somewhat general issue between padding at reliably- and unreliably-transmitted layers of the stack. HTTP/3 has something analogous (though carried in slightly frames). That draft actually discusses two options for padding and calls out the relation to packet loss:\r\n\r\n> Where HTTP/2 employs PADDING frames and Padding fields in other frames to make a connection more resistant to traffic analysis, HTTP/3 can either rely on transport-layer padding or employ the reserved frame and stream types discussed in Section 7.2.8 and Section 6.2.3. These methods of padding produce different results in terms of the granularity of padding, how padding is arranged in relation to the information that is being protected, whether padding is applied in the case of packet loss, and how an implementation might control padding. Redundant padding could even be counterproductive.\r\n\r\nhttps://quicwg.org/base-drafts/draft-ietf-quic-http.html#name-padding-and-traffic-analysi\r\n\r\nShould we match that precedent and move the padding into the handshake itself? That would make it apply to DTLS and QUIC transparently. If we do, a couple possibilities to start with:\r\n\r\n* Say that ECH implementations must tolerate unsolicited padding extensions and inject those into various messages. This is a goofy around messages without extensions (CertificateVerify), or messages with multiple extension blocks (Certificate), but as long as there is an extension block _somewhere_ in each padded flight, it's probably possible to fudge it.\r\n* Say that ECH adds a new kind of Padding handshake message, which the sender can incorporate into the handshake as needed, and the receiver ignores.\r\n\r\nIf we leave ECH as-is, it seems to me QUIC (both spec and implementations) needs some changes to track padding across retransmission.",
       "createdAt": "2020-08-13T18:03:12Z",
-      "updatedAt": "2020-10-16T17:15:07Z",
+      "updatedAt": "2020-11-19T12:09:00Z",
       "closedAt": null,
       "comments": [
         {
@@ -7854,10 +7854,12 @@
       "author": "davidben",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
-      "labels": [],
+      "labels": [
+        "needs WG discussion"
+      ],
       "body": "I was thinking about #316 and the discussion on server HRR checks started by https://github.com/tlswg/draft-ietf-tls-esni/issues/325#issuecomment-705796082, and I'm not sure HRR cookies even work in split mode right now. First off, suppose we don't merge something like #316. The current text says:\r\n\r\n> Note: if the inner and outer ClientHellos use different groups for\r\n> their key shares or differ in some other way, then the HelloRetryRequest may\t\r\n> actually be invalid for one or the other ClientHello, in which case a fresh\t\r\n> ClientHello MUST be generated, ignoring the instructions in HelloRetryRequest.\t\r\n> Otherwise, the usual rules for HelloRetryRequest processing apply\r\n\r\nThis means if you get a cookied HRR only good for ClientHelloInner, there's no requirement to stick the cookie in ClientHelloOuter! But now the client-facing server can't see the cookie, so it can't be stateless. It would seem like #316 fixes this, but now we have a more fundamental problem: whose cookie?\r\n\r\nSuppose the client-facing server wishes to handle HRR statelessly. It decrypts the first ClientHelloInner and forwards it to the backend server. If the backend server responds with HRR, the client-facing server must forward the HRR as-is, or the transcript breaks. But the client-facing server has no opportunity to bind its state (ech_hrr_key) into the HRR cookie. (Perhaps there isn't even one. If there is, it's encrypted with the backend server's key anyway. Either way, it's fixed now.)\r\n\r\nThe simplest solution to all this is to only support stateful client-facing servers in split mode, unless the client-facing and backend servers can coordinate enough to share one cookie. I don't know if that would satisfy everyone. I could imagine doing something horrific to HRR.cookie, akin to what we did to ServerHello.random, but that sounds really messy.",
       "createdAt": "2020-10-11T15:59:26Z",
-      "updatedAt": "2020-10-16T17:15:07Z",
+      "updatedAt": "2020-11-19T12:09:00Z",
       "closedAt": null,
       "comments": [
         {
@@ -7897,15 +7899,15 @@
       "id": "MDU6SXNzdWU3MjQ5NzgxMjY=",
       "title": "Define separate codepoint (and name) for inner ECH extension",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/issues/348",
-      "state": "OPEN",
+      "state": "CLOSED",
       "author": "davidben",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
       "labels": [],
       "body": "It is unclear how a general TLS server is supposed to react to an ECH extension. It's sometimes empty and sometimes a ClientECH. An empty extension is not a valid ClientECH extension, so a server expending ClientECH should produce a `decode_error` (and vice versa).\r\n\r\nThe spec does talk about client-facing and backend servers as separate kinds of servers, but I thought the theory behind Split Mode was that backend servers were meant to be mostly standard TLS servers. That would suggest that backend-server-specific logic should be common to all TLS server implementations that know about ECH. In that case, perhaps we should say that:\r\n\r\n* The client ECH extension is either empty or a ClientECH structure.\r\n* If you see empty, this is an inner ClientHello. Do the ServerHello.random thing and otherwise handshake normally.\r\n* If you see non-empty and have ECHConfigs, parse as a ClientECH and decode_error on parse failure as usual. Do the client-facing server thing.\r\n\r\nOr is the idea that client-facing and backend servers are completely separate beasts and everyone always knows which they are? In that case, what happens if a client-facing server sees an empty ECH extension? What happens if a backend server sees a ClientECH-carrying ECH extension. Failure to parse an extension is normally fatal, but the two categories of server believe different parses are valid. In particular, this requires a backend server *never* see a general-purpose client connection, since it'd get confused by (possibly GREASE) ClientECH extensions.",
       "createdAt": "2020-10-19T21:10:47Z",
-      "updatedAt": "2020-11-17T06:42:48Z",
-      "closedAt": null,
+      "updatedAt": "2020-11-19T00:06:38Z",
+      "closedAt": "2020-11-19T00:06:37Z",
       "comments": [
         {
           "author": "cjpatton",
@@ -8018,6 +8020,13 @@
           "body": "I agree that this seems like the right direction. Haven't reviewed the PR.",
           "createdAt": "2020-11-17T06:42:48Z",
           "updatedAt": "2020-11-17T06:42:48Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "Fixed in #360. Closing.",
+          "createdAt": "2020-11-19T00:06:37Z",
+          "updatedAt": "2020-11-19T00:06:37Z"
         }
       ]
     },
@@ -27076,24 +27085,26 @@
       "id": "MDExOlB1bGxSZXF1ZXN0NDk1ODQzMzg5",
       "title": "Require HRR-sensitive parameters match in ClientHello(Outer|Inner).",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/316",
-      "state": "OPEN",
+      "state": "MERGED",
       "author": "chris-wood",
       "authorAssociation": "COLLABORATOR",
       "assignees": [],
       "labels": [],
       "body": "Closes #233.\r\n\r\nThis is limited to parameters applicable to TLS 1.3 and beyond. For example,\r\nTLS 1.2 ciphersuites may appear in ClientHelloOuter, so long as all TLS 1.3\r\nciphersuites in ClientHelloOuter match that in ClientHelloInner.\r\n\r\ncc @davidben, @cjpatton",
       "createdAt": "2020-09-30T23:25:50Z",
-      "updatedAt": "2020-11-18T05:16:35Z",
+      "updatedAt": "2020-11-19T00:10:06Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
       "baseRefOid": "9f485e939b99814f9a73c1e94ec5e44f0a8d4806",
       "headRepository": "tlswg/draft-ietf-tls-esni",
       "headRefName": "caw/require-hrr-match",
       "headRefOid": "d6408d375c3073b9f7d8b9a3b46ea91fb13bc9ec",
-      "closedAt": null,
-      "mergedAt": null,
-      "mergedBy": null,
-      "mergeCommit": null,
+      "closedAt": "2020-11-19T00:10:06Z",
+      "mergedAt": "2020-11-19T00:10:06Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "f5e18954a19565611c86a817e4414b0d282062b5"
+      },
       "comments": [
         {
           "author": "chris-wood",
@@ -32269,24 +32280,26 @@
       "id": "MDExOlB1bGxSZXF1ZXN0NTIyMDY2NzYy",
       "title": "Add is_client_hello_inner extension.",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/360",
-      "state": "OPEN",
+      "state": "MERGED",
       "author": "cbartle891",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
       "labels": [],
       "body": "Resolves a second issue detailed in https://github.com/tlswg/draft-ietf-tls-esni/issues/348. Replaces the empty encrypted_client_hello extension with a new extension, is_client_hello_inner, to indicate that the ClientHello is a ClientHelloInner.\r\n\r\nLet me know if I've completely misunderstood what the issue was or what the fix was supposed to be.",
       "createdAt": "2020-11-17T00:54:38Z",
-      "updatedAt": "2020-11-18T05:14:13Z",
+      "updatedAt": "2020-11-19T00:06:14Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
-      "baseRefOid": "9f485e939b99814f9a73c1e94ec5e44f0a8d4806",
+      "baseRefOid": "496b50b24d466c24f2d895cce0a8eb3472fc2ba1",
       "headRepository": "cbartle891/draft-ietf-tls-esni",
       "headRefName": "cdb/is_client_hello_inner",
-      "headRefOid": "4dc9cc9ee161ede91c99b77d982c11f1c4adc998",
-      "closedAt": null,
-      "mergedAt": null,
-      "mergedBy": null,
-      "mergeCommit": null,
+      "headRefOid": "82093ee4a61ec632afda4a8c0464c1ec26f66fdd",
+      "closedAt": "2020-11-19T00:06:14Z",
+      "mergedAt": "2020-11-19T00:06:14Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "c789ca42e2672dbdec20648866041f483d5082d5"
+      },
       "comments": [
         {
           "author": "cjpatton",
@@ -32320,25 +32333,25 @@
               "originalPosition": 72,
               "body": "I don't feel strongly about the name, though this extension seems to me more about \"swizzling\" ServerHello.random (by setting the confirmation signal), and less about the fact that the CH is of type ClientHelloInner. Unless there's other things that backend servers need to do in response to a CHInner (beyond putting in the acceptance signal), I'd refocus this extension so it targets just that piece.",
               "createdAt": "2020-11-17T01:01:51Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             },
             {
               "originalPosition": 79,
               "body": "If it's empty, I think we can omit this piece.\r\n\r\n```suggestion\r\n```",
               "createdAt": "2020-11-17T01:03:31Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             },
             {
               "originalPosition": 105,
               "body": "What if both extensions are present? I suppose the server MUST abort with illegal_parameter in that case? (I see below that it's suggested for servers to ignore the inner one, but it seems better to fail loudly here, since this is not permitted client behavior.)",
               "createdAt": "2020-11-17T01:04:14Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             },
             {
               "originalPosition": 120,
               "body": "(As above, I'd abort in this case.)",
               "createdAt": "2020-11-17T01:05:10Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32358,7 +32371,7 @@
               "originalPosition": 72,
               "body": "I basically had to do most of this entire change to understand what David meant by the \"swizzle\" comment, and I imagine it would be equally confusing for people who are new to this. To me, it's clearer to say \"this extension is just a sign that this ClientHello is an inner ClientHello,\" and then explain what the backend server does in reaction to that in that section.",
               "createdAt": "2020-11-17T01:24:34Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32378,7 +32391,7 @@
               "originalPosition": 151,
               "body": "My bike shed proposal is to use the following names:\r\n1. \"encrypted_client_hello\"\r\n2. \"ech_is_inner\"\r\n3. \"ech_outer_extensions\"\r\n\r\nThat way the extensions that are only meaningful to ECH have names that indicates as much.",
               "createdAt": "2020-11-17T07:03:03Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32398,7 +32411,7 @@
               "originalPosition": 151,
               "body": "Ack, dangit, I forgot to change \"outer_extensions.\" Sorry about that!",
               "createdAt": "2020-11-17T07:07:55Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32418,7 +32431,7 @@
               "originalPosition": 105,
               "body": "> ... but it seems better to fail loudly here, since this is not permitted client behavior.\r\n\r\nThis seems to be true in general, but elsewhere in the draft we deal with client misbehavior by rejecting. For example, if ClientECH.cipher_suite isn't a valid cipher suite for the ECHConfig indicated by ClientECH.config_id, then the client-facing server skips this ECHConfig and moves on to the next. This done for \"don't stick out\" reasons. I think it makes sense to follow the same pattern here.\r\n\r\nTL;DR: I think the text is better as-is.",
               "createdAt": "2020-11-17T07:14:17Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32438,7 +32451,7 @@
               "originalPosition": 105,
               "body": "But a difference in algorithm is not the same as an actual implementation bug on the client side. It could be because of a server misconfiguration. This edge case (sending both extensions) is a flat out bug, no?",
               "createdAt": "2020-11-17T07:19:36Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32458,7 +32471,7 @@
               "originalPosition": 105,
               "body": "It doesn't add anything to the protocol, but should it be fatal? (I chose to ignore it just for leniency/flexibility but I'm fine with making it a fatal error instead.)",
               "createdAt": "2020-11-17T08:30:33Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32478,7 +32491,7 @@
               "originalPosition": 105,
               "body": "I would argue that choosing a cipher suite other than one that is indicated by the ECHConfig is also an implementation bug. (Though I should add that I don't have a strong opinion about aborting or not here.)",
               "createdAt": "2020-11-17T08:33:16Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32498,7 +32511,7 @@
               "originalPosition": 105,
               "body": "I think other people need to weigh in here. @davidben, penny for your thoughts?",
               "createdAt": "2020-11-17T15:57:00Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32518,7 +32531,7 @@
               "originalPosition": 105,
               "body": "I think let's require failure.",
               "createdAt": "2020-11-17T16:29:06Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32538,19 +32551,19 @@
               "originalPosition": 67,
               "body": "- Let's promote this subsubsection to a subsection and make it a subsection of {{encrypted-client-hello}}\r\n- In order to be consistent with the other subsections, I suggest using a title that's suggestive of the code points purpose. E.g., `Differentiating between the ClientHelloInner and the ClientHelloOuter`.",
               "createdAt": "2020-11-17T22:21:39Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             },
             {
               "originalPosition": 72,
               "body": "I like the name, for the record.",
               "createdAt": "2020-11-17T22:25:34Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             },
             {
               "originalPosition": 151,
               "body": "No biggy!",
               "createdAt": "2020-11-17T22:28:25Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32570,7 +32583,7 @@
               "originalPosition": 92,
               "body": "```suggestion\r\nIf the client offers the \"ech_is_inner\" extension ({{is-inner}})\r\nin addition to the \"encrypted_client_hello\" extension, the server MUST abort\r\nwith an \"illegal_parameter\" alert.\r\n```",
               "createdAt": "2020-11-18T04:46:54Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32590,7 +32603,7 @@
               "originalPosition": 67,
               "body": "> make it a subsection of {{encrypted-client-hello}}\r\n\r\nI'm not sure about this because `ech_is_inner` isn't part of the `encrypted_client_hello` extension.",
               "createdAt": "2020-11-18T04:54:53Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32610,7 +32623,7 @@
               "originalPosition": 67,
               "body": "I'd leave it as-is for now. We can move it around later if needed.",
               "createdAt": "2020-11-18T04:56:00Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32630,7 +32643,7 @@
               "originalPosition": 106,
               "body": "```suggestion\r\n### ClientHelloInner Indication Extension {#is-inner}\r\n```",
               "createdAt": "2020-11-18T04:57:13Z",
-              "updatedAt": "2020-11-18T05:09:08Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32650,7 +32663,7 @@
               "originalPosition": 67,
               "body": "Fine with me.",
               "createdAt": "2020-11-18T05:13:33Z",
-              "updatedAt": "2020-11-18T05:13:33Z"
+              "updatedAt": "2020-11-19T00:05:43Z"
             }
           ]
         },
@@ -32666,6 +32679,126 @@
           "createdAt": "2020-11-18T05:14:13Z",
           "updatedAt": "2020-11-18T05:14:13Z",
           "comments": []
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTMzOTc4NzI5",
+          "commit": {
+            "abbreviatedOid": "58b697f"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-19T00:01:40Z",
+          "updatedAt": "2020-11-19T00:01:41Z",
+          "comments": [
+            {
+              "originalPosition": 136,
+              "body": "```suggestion\r\nServers that support ECH play one of two roles, depending on the extension\r\n```",
+              "createdAt": "2020-11-19T00:01:40Z",
+              "updatedAt": "2020-11-19T00:05:43Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTMzOTc5NzA4",
+          "commit": {
+            "abbreviatedOid": "58b697f"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-19T00:03:49Z",
+          "updatedAt": "2020-11-19T00:03:50Z",
+          "comments": [
+            {
+              "originalPosition": 167,
+              "body": "```suggestion\r\nclient by computing its ServerHello as described here. If both the \"ech_is_inner\" \r\nextension and \"encrypted_client_hello\" extensions are present in the ClientHello, \r\nthe backend server MUST abort with an \"illegal_parameter\" alert.\r\n```",
+              "createdAt": "2020-11-19T00:03:50Z",
+              "updatedAt": "2020-11-19T00:05:43Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTMzOTc5Nzgw",
+          "commit": {
+            "abbreviatedOid": "58b697f"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-19T00:04:00Z",
+          "updatedAt": "2020-11-19T00:04:01Z",
+          "comments": [
+            {
+              "originalPosition": 165,
+              "body": "```suggestion\r\nUpon receipt of an \"ech_is_inner\" extension in a ClientHello, if the backend\r\n```",
+              "createdAt": "2020-11-19T00:04:00Z",
+              "updatedAt": "2020-11-19T00:05:43Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTMzOTgwMDkz",
+          "commit": {
+            "abbreviatedOid": "dd95a13"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-19T00:04:48Z",
+          "updatedAt": "2020-11-19T00:04:48Z",
+          "comments": [
+            {
+              "originalPosition": 170,
+              "body": "```suggestion\r\nand \"encrypted_client_hello\" extensions are present in the ClientHello, the backend \r\nserver MUST abort with an \"illegal_parameter\" alert.\r\n```",
+              "createdAt": "2020-11-19T00:04:48Z",
+              "updatedAt": "2020-11-19T00:05:43Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTMzOTgwMTk3",
+          "commit": {
+            "abbreviatedOid": "dd95a13"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-19T00:05:05Z",
+          "updatedAt": "2020-11-19T00:05:06Z",
+          "comments": [
+            {
+              "originalPosition": 169,
+              "body": "```suggestion\r\nextension and \"encrypted_client_hello\" extensions are present in the ClientHello,\r\n```",
+              "createdAt": "2020-11-19T00:05:05Z",
+              "updatedAt": "2020-11-19T00:05:43Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTMzOTgwNDE4",
+          "commit": {
+            "abbreviatedOid": "20d8af3"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-19T00:05:38Z",
+          "updatedAt": "2020-11-19T00:05:38Z",
+          "comments": [
+            {
+              "originalPosition": 169,
+              "body": "```suggestion\r\nand \"encrypted_client_hello\" extensions are present in the ClientHello, the backend\r\n```",
+              "createdAt": "2020-11-19T00:05:38Z",
+              "updatedAt": "2020-11-19T00:05:43Z"
+            }
+          ]
         }
       ]
     },
@@ -32674,24 +32807,26 @@
       "id": "MDExOlB1bGxSZXF1ZXN0NTIyNzg0MTY0",
       "title": "Copy the entire extension on HRR + GREASE for now.",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/361",
-      "state": "OPEN",
+      "state": "MERGED",
       "author": "davidben",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
       "labels": [],
       "body": "This is a temporary mitigation for the compatibility risks from #358, as\r\nany clients experimenting with GREASE will impact servers that otherwise\r\ndon't expect ECH. To resolve this issue overall, we may need a more\r\ninvolved solution.",
       "createdAt": "2020-11-18T00:05:46Z",
-      "updatedAt": "2020-11-18T23:02:25Z",
+      "updatedAt": "2020-11-19T12:08:37Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
       "baseRefOid": "9f485e939b99814f9a73c1e94ec5e44f0a8d4806",
       "headRepository": "davidben/draft-ietf-tls-esni",
       "headRefName": "hrr-bandaid",
       "headRefOid": "f288d98e489d2603244b11626beabcb73850a074",
-      "closedAt": null,
-      "mergedAt": null,
-      "mergedBy": null,
-      "mergeCommit": null,
+      "closedAt": "2020-11-19T12:08:37Z",
+      "mergedAt": "2020-11-19T12:08:37Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "8b2dd889525ac50c703d9c3267d1c61db6d7a81c"
+      },
       "comments": [],
       "reviews": [
         {
@@ -32851,6 +32986,26 @@
               "body": "Ah I see, you wanted the comment to reflect that as well. It's a big vague, but I'm fine leaving it as is.",
               "createdAt": "2020-11-18T23:02:25Z",
               "updatedAt": "2020-11-18T23:02:25Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM0MzY3MTI5",
+          "commit": {
+            "abbreviatedOid": "f288d98"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "Given the compatibility concerns @davidben found, and based on discussion in IETF 109, I think this is prudent to merge for -09. Doing so now.",
+          "createdAt": "2020-11-19T12:07:41Z",
+          "updatedAt": "2020-11-19T12:08:30Z",
+          "comments": [
+            {
+              "originalPosition": 12,
+              "body": "Yeah, I think the comment is fine as-is.",
+              "createdAt": "2020-11-19T12:07:41Z",
+              "updatedAt": "2020-11-19T12:08:30Z"
             }
           ]
         }
