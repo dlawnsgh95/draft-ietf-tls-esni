@@ -5,11 +5,11 @@
 tls                                                          E. Rescorla
 Internet-Draft                                                RTFM, Inc.
 Intended status: Standards Track                                  K. Oku
-Expires: 22 May 2021                                              Fastly
+Expires: 23 May 2021                                              Fastly
                                                              N. Sullivan
                                                                C.A. Wood
                                                               Cloudflare
-                                                        18 November 2020
+                                                        19 November 2020
 
 
                        TLS Encrypted Client Hello
@@ -35,7 +35,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 22 May 2021.
+   This Internet-Draft will expire on 23 May 2021.
 
 Copyright Notice
 
@@ -65,9 +65,10 @@ Table of Contents
      5.2.  Authenticating the ClientHelloOuter
    6.  Client Behavior
      6.1.  Offering ECH
-       6.1.1.  Recommended Padding Scheme
-       6.1.2.  Handling the Server Response
-       6.1.3.  Handling HelloRetryRequest
+       6.1.1.  ClientHelloInner Indication Extension
+       6.1.2.  Recommended Padding Scheme
+       6.1.3.  Handling the Server Response
+       6.1.4.  Handling HelloRetryRequest
      6.2.  GREASE ECH
    7.  Server Behavior
      7.1.  Client-Facing Server
@@ -239,13 +240,13 @@ Table of Contents
    the public key and metadata preconfigured.
 
    When a client wants to establish a TLS session with the backend
-   server, it constructs its ClientHello as usual (we will refer to this
-   as the ClientHelloInner message) and then encrypts this message using
-   the public key of the ECH configuration.  It then constructs a new
-   ClientHello (ClientHelloOuter) with innocuous values for sensitive
-   extensions, e.g., SNI, ALPN, etc., and with an
-   "encrypted_client_hello" extension, which this document defines
-   (Section 5).  The extension's payload carries the encrypted
+   server, it constructs its ClientHello as indicated in Section 6.1.
+   (We will refer to this as the ClientHelloInner message.)  The client
+   encrypts this message using the public key of the ECH configuration.
+   It then constructs a new ClientHello (ClientHelloOuter) with
+   innocuous values for sensitive extensions, e.g., SNI, ALPN, etc., and
+   with an "encrypted_client_hello" extension, which this document
+   defines (Section 5).  The extension's payload carries the encrypted
    ClientHelloInner and specifies the ECH configuration used for
    encryption.  Finally, it sends ClientHelloOuter to the server.
 
@@ -328,7 +329,7 @@ Table of Contents
 
    public_name  The non-empty name of client-facing server, i.e., the
       entity trusted to update these encryption keys.  This is used to
-      repair misconfigurations, as described in Section 6.1.2.
+      repair misconfigurations, as described in Section 6.1.3.
 
    public_key  The HPKE public key used by the client to encrypt
       ClientHelloInner.
@@ -385,14 +386,11 @@ Table of Contents
    "encrypted_client_hello" extension, defined as follows:
 
        enum {
-          encrypted_client_hello(0xfe08), (65535)
+          encrypted_client_hello(0xfe09), (65535)
        } ExtensionType;
 
-   When offered by the client, the extension appears in the
-   ClientHelloOuter and may also appear in the ClientHelloInner.  When
-   sent in the ClientHelloInner, the payload MUST be empty.  When sent
-   in the ClientHelloOuter, the payload MUST be have the following
-   structure:
+   When offered by the client, the extension appears only in the
+   ClientHelloOuter.  The payload MUST have the following structure:
 
        struct {
           ECHCipherSuite cipher_suite;
@@ -418,12 +416,6 @@ Table of Contents
    payload  The serialized and encrypted ClientHelloInner structure,
       encrypted using HPKE as described in Section 6.1.
 
-   When offering the "encrypted_client_hello" extension in its
-   ClientHelloOuter, the client MUST also offer an empty
-   "encrypted_client_hello" extension in its ClientHelloInner, wherever
-   applicable.  (This requirement is not applicable when the extension
-   is generated as described in Section 6.2.)
-
    When the client offers the "encrypted_client_hello" extension, the
    server MAY include an "encrypted_client_hello" extension in its
    EncryptedExtensions message with the following payload:
@@ -446,11 +438,11 @@ Table of Contents
    ClientHelloInner and ClientHelloOuter will lead to a very large
    overall size.  One particularly pathological example is "key_share"
    with post-quantum algorithms.  In order to reduce the impact of
-   duplicated extensions, the client may use the "outer_extensions"
+   duplicated extensions, the client may use the "ech_outer_extensions"
    extension.
 
        enum {
-          outer_extensions(0xfd00), (65535)
+          ech_outer_extensions(0xfd00), (65535)
        } ExtensionType;
 
        ExtensionType OuterExtensions<2..254>;
@@ -466,7 +458,7 @@ Table of Contents
    The client then MAY substitute extensions which it knows will be
    duplicated in ClientHelloOuter.  To do so, the client removes and
    replaces extensions from EncodedClientHelloInner with a single
-   "outer_extensions" extension.  Removed extensions MUST be ordered
+   "ech_outer_extensions" extension.  Removed extensions MUST be ordered
    consecutively in ClientHelloInner.  The list of outer extensions,
    OuterExtensions, includes those which were removed from
    EncodedClientHelloInner, in the order in which they were removed.
@@ -478,13 +470,13 @@ Table of Contents
    The client-facing server computes ClientHelloInner by reversing this
    process.  First it makes a copy of EncodedClientHelloInner and copies
    the legacy_session_id field from ClientHelloOuter.  It then looks for
-   an "outer_extensions" extension.  If found, it replaces the extension
-   with the corresponding sequence of extensions in the
+   an "ech_outer_extensions" extension.  If found, it replaces the
+   extension with the corresponding sequence of extensions in the
    ClientHelloOuter.  If any referenced extensions are missing or if
    "encrypted_client_hello" appears in the list, the server MUST abort
    the connection with an "illegal_parameter" alert.
 
-   The "outer_extensions" extension is only used for compressing the
+   The "ech_outer_extensions" extension is only used for compressing the
    ClientHelloInner.  It MUST NOT be sent in either ClientHelloOuter or
    ClientHelloInner.
 
@@ -548,10 +540,15 @@ Table of Contents
    2.  It MUST NOT offer to resume any session for TLS 1.2 and below.
 
    3.  It SHOULD contain TLS padding [RFC7685] as described in
-       Section 6.1.1.
+       Section 6.1.2.
 
    4.  If it intends to compress any extensions (see Section 5.1), it
        MUST order those extensions consecutively.
+
+   5.  It MUST include the "ech_is_inner" extension as defined in
+       Section 6.1.1.  (This requirement is not applicable when the
+       "encrypted_client_hello" extension is generated as described in
+       Section 6.2.)
 
    The client then constructs EncodedClientHelloInner as described in
    Section 5.1.  Finally, it constructs the ClientHelloOuter message
@@ -626,7 +623,24 @@ Table of Contents
    both sides, implementations MUST compute the field as specified in
    Section 5.
 
-6.1.1.  Recommended Padding Scheme
+6.1.1.  ClientHelloInner Indication Extension
+
+   If, in a ClientHello, the "encrypted_client_hello" extension is not
+   present and an "ech_is_inner" extension is present, the ClientHello
+   is a ClientHelloInner.  This extension MUST only be sent in the
+   ClientHello message.
+
+       enum {
+          ech_is_inner(0xda09), (65535)
+       } ExtensionType;
+
+   The "extension_data" field of the "ech_is_inner" extension is zero
+   length.
+
+   Backend servers (as described in Section 7) MUST support the
+   "ech_is_inner" extension.
+
+6.1.2.  Recommended Padding Scheme
 
    This section describes a deterministic padding mechanism based on the
    following observation: individual extensions can reveal sensitive
@@ -664,7 +678,7 @@ Table of Contents
    EncryptedExtension, so that handshake message also needs to be padded
    using TLS record layer padding.
 
-6.1.2.  Handling the Server Response
+6.1.3.  Handling the Server Response
 
    As described in Section 7, the server MAY either accept ECH and use
    ClientHelloInner or reject it and use ClientHelloOuter.  In handling
@@ -674,17 +688,17 @@ Table of Contents
    "accept_confirmation" as defined in Section 7.2.  Otherwise, it
    presumes rejection.
 
-6.1.2.1.  Accepted ECH
+6.1.3.1.  Accepted ECH
 
    If the server used ClientHelloInner, the client proceeds with the
    connection as usual, authenticating the connection for the true
    server name.
 
-6.1.2.2.  Rejected ECH
+6.1.3.2.  Rejected ECH
 
    If the server used ClientHelloOuter, the client proceeds with the
    handshake, authenticating for ECHConfig.public_name as described in
-   Section 6.1.2.3.  If authentication or the handshake fails, the
+   Section 6.1.3.3.  If authentication or the handshake fails, the
    client MUST return a failure to the calling application.  It MUST NOT
    use the retry keys.
 
@@ -714,7 +728,7 @@ Table of Contents
    If the server negotiates an earlier version of TLS, or if it does not
    provide an "encrypted_client_hello" extension in EncryptedExtensions,
    the client proceeds with the handshake, authenticating for
-   ECHConfigContents.public_name as described in Section 6.1.2.3.  If an
+   ECHConfigContents.public_name as described in Section 6.1.3.3.  If an
    earlier version was negotiated, the client MUST NOT enable the False
    Start optimization [RFC7918] for this handshake.  If authentication
    or the handshake fails, the client MUST return a failure to the
@@ -732,7 +746,7 @@ Table of Contents
    "encrypted_client_hello" extension.  If the client does not retry in
    either scenario, it MUST report an error to the calling application.
 
-6.1.2.3.  Authenticating for the Public Name
+6.1.3.3.  Authenticating for the Public Name
 
    When the server rejects ECH or otherwise ignores
    "encrypted_client_hello" extension, it continues with the handshake
@@ -753,11 +767,11 @@ Table of Contents
    report such connections as successful to the application.  It
    additionally MUST ignore all session tickets and session IDs
    presented by the server.  These connections are only used to trigger
-   retries, as described in Section 6.1.2.  This may be implemented, for
+   retries, as described in Section 6.1.3.  This may be implemented, for
    instance, by reporting a failed connection with a dedicated error
    code.
 
-6.1.3.  Handling HelloRetryRequest
+6.1.4.  Handling HelloRetryRequest
 
    If the server sends a HelloRetryRequest in response to the
    ClientHello, the client sends a second updated ClientHello per the
@@ -823,7 +837,7 @@ Table of Contents
       bytes, where C is the ciphertext expansion of the selected AEAD
       scheme and L is the size of the EncodedClientHelloInner the client
       would compute when offering ECH, padded according to
-      Section 6.1.1.
+      Section 6.1.2.
 
    When sending a second ClientHello in response to a HelloRetryRequest,
    the client copies the "cipher_suite" field from the first
@@ -847,22 +861,26 @@ Table of Contents
 
 7.  Server Behavior
 
-   Servers that that implement the ECH extension play one of two roles,
-   depending on the form of the ECH extension in the ClientHello.  If
-   the extension value is non-empty, the server acts as a client-facing
-   server and proceeds as described in Section 7.1 to extract a
-   ClientHelloInner if available.  If the extension value is empty, the
-   server acts as a backend server and proceeds as described in
-   Section 7.2.
+   Servers that support ECH play one of two roles, depending on the
+   extension in the ClientHello.  If the "encrypted_client_hello"
+   extension is present, the server acts as a client-facing server and
+   proceeds as described in Section 7.1 to extract a ClientHelloInner,
+   if available.  If the "ech_is_inner" extension is present and the
+   "encrypted_client_hello" extension is not present, the server acts as
+   a backend server and proceeds as described in Section 7.2.
 
 7.1.  Client-Facing Server
 
-   Upon receiving a non-empty "encrypted_client_hello" extension in an
-   initial ClientHello, the client-facing server determines if it will
-   accept ECH, prior to negotiating any other TLS parameters.  Note that
+   Upon receiving an "encrypted_client_hello" extension in an initial
+   ClientHello, the client-facing server determines if it will accept
+   ECH, prior to negotiating any other TLS parameters.  Note that
    successfully decrypting the extension will result in a new
    ClientHello to process, so even the client's TLS version preferences
    may have changed.
+
+   If the client offers the "ech_is_inner" extension (Section 6.1.1) in
+   addition to the "encrypted_client_hello" extension, the server MUST
+   abort with an "illegal_parameter" alert.
 
    First, the server collects a set of candidate ECHConfigs.  This set
    is determined by one of the two following methods:
@@ -974,10 +992,12 @@ Table of Contents
 
 7.2.  Backend Server
 
-   Upon receipt of an empty "encrypted_client_hello" extension, if the
+   Upon receipt of an "ech_is_inner" extension in a ClientHello, if the
    backend server negotiates TLS 1.3 or higher, then it MUST confirm ECH
    acceptance to the client by computing its ServerHello as described
-   here.
+   here.  If both the "ech_is_inner" and "encrypted_client_hello"
+   extensions are present in the ClientHello, the backend server MUST
+   abort with an "illegal_parameter" alert.
 
    The backend server begins by generating a message ServerHelloECHConf,
    which is identical in content to a ServerHello message with the
@@ -1032,7 +1052,7 @@ Table of Contents
    all, it will ignore it as required by [RFC8446]; Section 4.1.2.
    Provided the server can present a certificate valid for the public
    name, the client can safely retry with updated settings, as described
-   in Section 6.1.2.
+   in Section 6.1.3.
 
    Unless ECH is disabled as a result of successfully establishing a
    connection to the public name, the client MUST NOT fall back to using
@@ -1051,7 +1071,7 @@ Table of Contents
 
    Depending on whether the client is configured to accept the proxy's
    certificate as authoritative for the public name, this may trigger
-   the retry logic described in Section 6.1.2 or result in a connection
+   the retry logic described in Section 6.1.3 or result in a connection
    failure.  A proxy which is not authoritative for the public name
    cannot forge a signal to disable ECH.
 
@@ -1361,7 +1381,7 @@ Table of Contents
 10.9.  Padding Policy
 
    Variations in the length of the ClientHelloInner ciphertext could
-   leak information about the corresponding plaintext.  Section 6.1.1
+   leak information about the corresponding plaintext.  Section 6.1.2
    describes a RECOMMENDED padding mechanism for clients aimed at
    reducing potential information leakage.
 
@@ -1488,31 +1508,31 @@ Table of Contents
    continue when ClientHelloInner is for any other name.  This
    introduces an oracle for testing encrypted SNI values.
 
-          Client              Attacker                       Server
+         Client              Attacker                       Server
 
-                                        handshake and ticket
-                                           for "example.com"
-                                             <-------->
+                                       handshake and ticket
+                                          for "example.com"
+                                          <-------->
 
-          ClientHello
-          + key_share
-          + ech
-            + outer_extensions(pre_shared_key)
-          + pre_shared_key
-                       -------->
-                              (intercept)
-                              ClientHello
-                              + key_share
-                              + ech
-                                + outer_extensions(pre_shared_key)
-                              + pre_shared_key'
-                                                -------->
-                                                              Alert
-                                                               -or-
-                                                        ServerHello
-                                                                ...
-                                                           Finished
-                                                <--------
+         ClientHello
+         + key_share
+         + ech
+         + ech_outer_extensions(pre_shared_key)
+         + pre_shared_key
+                     -------->
+                           (intercept)
+                           ClientHello
+                           + key_share
+                           + ech
+                              + ech_outer_extensions(pre_shared_key)
+                           + pre_shared_key'
+                                             -------->
+                                                            Alert
+                                                            -or-
+                                                      ServerHello
+                                                               ...
+                                                         Finished
+                                             <--------
 
               Figure 5: Message flow for malleable ClientHello
 
@@ -1531,21 +1551,23 @@ Table of Contents
 
 11.1.  Update of the TLS ExtensionType Registry
 
-   IANA is requested to create the following two entries in the existing
-   registry for ExtensionType (defined in [RFC8446]):
+   IANA is requested to create the following three entries in the
+   existing registry for ExtensionType (defined in [RFC8446]):
 
-   1.  encrypted_client_hello(0xfe08), with "TLS 1.3" column values
-       being set to "CH, EE", and "Recommended" column being set to
-       "Yes".
+   1.  encrypted_client_hello(0xfe09), with "TLS 1.3" column values set
+       to "CH, EE", and "Recommended" column set to "Yes".
 
-   2.  outer_extensions(0xfd00), with the "TLS 1.3" column values being
-       set to "", and "Recommended" column being set to "Yes".
+   2.  ech_is_inner (0xda09), with "TLS 1.3" column values set to "CH",
+       and "Recommended" column set to "Yes".
+
+   3.  ech_outer_extensions(0xfd00), with the "TLS 1.3" column values
+       set to "", and "Recommended" column set to "Yes".
 
 11.2.  Update of the TLS Alert Registry
 
    IANA is requested to create an entry, ech_required(121) in the
    existing registry for Alerts (defined in [RFC8446]), with the "DTLS-
-   OK" column being set to "Y".
+   OK" column set to "Y".
 
 12.  ECHConfig Extension Guidance
 
