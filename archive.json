@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-11-19T12:09:07.986175+00:00",
+  "timestamp": "2020-11-20T22:11:01.891860+00:00",
   "repo": "tlswg/draft-ietf-tls-esni",
   "labels": [
     {
@@ -5576,12 +5576,10 @@
       "author": "davidben",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
-      "labels": [
-        "needs WG discussion"
-      ],
+      "labels": [],
       "body": "ECH currently uses two different kinds of padding. The encrypted ClientHello is padded with the padding extension, while the server response is padded with TLS 1.3 record layer padding.\r\nhttps://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-07#section-7.1\r\nhttps://datatracker.ietf.org/doc/html/draft-ietf-tls-esni-07#section-7.2\r\n\r\nUsing record-level padding in TLS over TCP is relatively straightforward as it\u2019s ordered. However DTLS and QUIC have their own record layers, with retransmission logic. Properly hiding some length then requires that packet loss and retransmission logic track and retransmit padding as if it were integrated into the byte stream.\r\n\r\nIn the case of QUIC, when a QUIC packet is determined to be lost, it is not retransmitted whole; instead information carried in the frames in lost packets might be sent again in new frames (draft-ietf-quic-transport, section 13.3). That same section states that PADDING frames do not need to be retransmitted. If ECH in QUIC relies on QUIC transport layer padding, that would need to be changed, and implementations would need to track how much adding is associated with CRYPTO frame data for retransmission.\r\n\r\nQUIC additionally needs the padding size communicated across API boundaries between the TLS and QUIC implementations. It\u2019s likely that everyone\u2019s first pass at the API will omit this, only to need to add an extra parameter (API change) later when they implement ECH.\r\n\r\nThis seems a somewhat general issue between padding at reliably- and unreliably-transmitted layers of the stack. HTTP/3 has something analogous (though carried in slightly frames). That draft actually discusses two options for padding and calls out the relation to packet loss:\r\n\r\n> Where HTTP/2 employs PADDING frames and Padding fields in other frames to make a connection more resistant to traffic analysis, HTTP/3 can either rely on transport-layer padding or employ the reserved frame and stream types discussed in Section 7.2.8 and Section 6.2.3. These methods of padding produce different results in terms of the granularity of padding, how padding is arranged in relation to the information that is being protected, whether padding is applied in the case of packet loss, and how an implementation might control padding. Redundant padding could even be counterproductive.\r\n\r\nhttps://quicwg.org/base-drafts/draft-ietf-quic-http.html#name-padding-and-traffic-analysi\r\n\r\nShould we match that precedent and move the padding into the handshake itself? That would make it apply to DTLS and QUIC transparently. If we do, a couple possibilities to start with:\r\n\r\n* Say that ECH implementations must tolerate unsolicited padding extensions and inject those into various messages. This is a goofy around messages without extensions (CertificateVerify), or messages with multiple extension blocks (Certificate), but as long as there is an extension block _somewhere_ in each padded flight, it's probably possible to fudge it.\r\n* Say that ECH adds a new kind of Padding handshake message, which the sender can incorporate into the handshake as needed, and the receiver ignores.\r\n\r\nIf we leave ECH as-is, it seems to me QUIC (both spec and implementations) needs some changes to track padding across retransmission.",
       "createdAt": "2020-08-13T18:03:12Z",
-      "updatedAt": "2020-11-19T12:09:00Z",
+      "updatedAt": "2020-11-19T12:09:39Z",
       "closedAt": null,
       "comments": [
         {
@@ -7854,12 +7852,10 @@
       "author": "davidben",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
-      "labels": [
-        "needs WG discussion"
-      ],
+      "labels": [],
       "body": "I was thinking about #316 and the discussion on server HRR checks started by https://github.com/tlswg/draft-ietf-tls-esni/issues/325#issuecomment-705796082, and I'm not sure HRR cookies even work in split mode right now. First off, suppose we don't merge something like #316. The current text says:\r\n\r\n> Note: if the inner and outer ClientHellos use different groups for\r\n> their key shares or differ in some other way, then the HelloRetryRequest may\t\r\n> actually be invalid for one or the other ClientHello, in which case a fresh\t\r\n> ClientHello MUST be generated, ignoring the instructions in HelloRetryRequest.\t\r\n> Otherwise, the usual rules for HelloRetryRequest processing apply\r\n\r\nThis means if you get a cookied HRR only good for ClientHelloInner, there's no requirement to stick the cookie in ClientHelloOuter! But now the client-facing server can't see the cookie, so it can't be stateless. It would seem like #316 fixes this, but now we have a more fundamental problem: whose cookie?\r\n\r\nSuppose the client-facing server wishes to handle HRR statelessly. It decrypts the first ClientHelloInner and forwards it to the backend server. If the backend server responds with HRR, the client-facing server must forward the HRR as-is, or the transcript breaks. But the client-facing server has no opportunity to bind its state (ech_hrr_key) into the HRR cookie. (Perhaps there isn't even one. If there is, it's encrypted with the backend server's key anyway. Either way, it's fixed now.)\r\n\r\nThe simplest solution to all this is to only support stateful client-facing servers in split mode, unless the client-facing and backend servers can coordinate enough to share one cookie. I don't know if that would satisfy everyone. I could imagine doing something horrific to HRR.cookie, akin to what we did to ServerHello.random, but that sounds really messy.",
       "createdAt": "2020-10-11T15:59:26Z",
-      "updatedAt": "2020-11-19T12:09:00Z",
+      "updatedAt": "2020-11-19T12:09:39Z",
       "closedAt": null,
       "comments": [
         {
@@ -8108,7 +8104,7 @@
       "labels": [],
       "body": "The primary \"don't stick out\" [RFC8744] consideration for ECH is to ensure that the new extension does not trigger middlebox misbehavior. To accomplish this, the draft specifies two protocol variants: in the \"real-ECH\" protocol the client offers the ECH extension, which is processed by the server; in the \"grease-ECH\" protocol, the client generates a dummy ECH extension, which is ignored or rejected by the server. Grease-ECH is designed to look enough like real-ECH so that middleboxes do not differentiate the latter from the former, the idea being that if grease-ECH can be deployed without triggering middlebox misbehavior, then real-ECH ought to be deployable, too.\r\n\r\nBut what do we mean when we say grease-ECH should \"look like\" real-ECH? In ECH-08 the stated goal is \"to hide, to some extent, **(a)** whether or not a specific server supports ECH and **(b)** whether or not ECH was accepted for a particular connection\" [ECH-08, [Sec.10.1](https://tools.ietf.org/html/draft-ietf-tls-esni-08#section-10.1)]. These goals are hard to meet. First, an attacker can violate **(a)** by simply running grease-ECH with the server to see if it returns retry configs. Second, there are a number of ways to distinguish real-ECH from grease-ECH, thereby violating **(b)**:\r\n1. @huitema's [client-reaction attack](https://mailarchive.ietf.org/arch/msg/tls/EAeKCNq7JAFm8DFaoe2MwSslZTQ/).\r\n1. If the ECH config is known to the attacker, then it can use ClientECH.config_id to distinguish real-ECH from grease-ECH. \r\n1. The outer SNI must match ECHConfig.public_name. Hence, for connections to a given backend server, the outer SNI will be different in real-ECH than in grease-ECH.\r\n1. The client and server must negotiate TLS 1.3 when ECH is accepted, but may otherwise negotiate an earlier version. In particular, it is valid for a client to run grease-ECH but not indicate support for 1.3.\r\n1. PSK must not be offered in the outer CH in real-ECH, but may be offered in grease-ECH. In general, the set of extensions negotiated may depend on whether ECH was accepted.\r\n1. The client-facing server must not request client authentication when rejecting ECH, but the backend server may request client authentication when ECH was accepted.\r\n1. Whether or not an HRR message is issued by the server may depend on ECH acceptance.\r\n1. There are a few active distinguisher attacks that exploit the HRR codepath.\r\n\r\nSome of these distinguishers can be mitigated by careful implementation, while mitigating others would require changes to the specification. (E.g., #353.) However, it's unlikely that _all_ implementations will mitigate _all_ of these distinguishers. Moreover, future extensions are likely to change the shape of TLS in a way that leads to yet more distinguishers.\r\n\r\nGiven all of this, I wonder if indistinguishability (of real-ECH from grease-ECH) is the right way to think about this problem. It seems to me that it's stronger than strictly necessary, since the existence of a distinguisher does not necessarily imply that some feature of real-ECH will trigger middlebox misbehavior that would not otherwise be triggered by grease-ECH. For example, while the outer SNI might be a dead give away of likely ECH usage, this value is unlikely to impact middlebox behavior. Similarly, the absence of the PSK extension in real-ECH is unlikely to cause issues.\r\n\r\nIf it were possible to enumerate the set of properties that impact middlebox behavior, then ensuring that middleboxes don't differentiate between real-ECH and grease-ECH may simply be a matter of ensuring that this set of properties does not vary. This approach would be roughly analogous to the design of \"Middlebox Compatibility Mode\" in TLS 1.3, which makes the handshake \"look like\" a particular mode of 1.2 that middleboxes are known to tolerate. Of course, a curious adversary (e.g., a censor) can easily distinguish between these, but experience suggests that middleboxes do not treat them differently.\r\n\r\nThis leaves us the daunting task of deciding what features are known to impact the behavior of existing middleboxes. Here's a preliminary list of things that might fit in this category. For the sake of discussion, let's call them **differentiable features**:\r\n1. The set of extensions that appear to be negotiated;\r\n1. Visible alerts, e.g., \"bad_record_mac\";\r\n1. Number of round trips in a given transport context (e.g., TCP connection);\r\n1. Packet size, or the number of packets comprising a single message;\r\n1. Timing;\r\n1. ...\r\n\r\nI think we should set the following goals for ECH-09 (or some draft that follows it).\r\n1. If we can agree on a set of differentiable features, then we should ensure that this set does not vary between real-ECH and grease-ECH.\r\n1. ECH-08 aims only to mitigate **passive** \"don't stick out\" attacks, but there is a lot of evidence that middleboxes exhibit **active** behavior. (For example, middleboxes have been observed removing CH extensions they don't recognize or adding their own.) Thus, we should aim to thwart attacks that change the set of differentiable features in real-ECH vs. grease-ECH. This includes @huitema's attack in particular: see #353.\r\n1. To the greatest extent possible, the spec should allow for implementations to aim for the strongest possible notion of security. For example, we might consider relaxing the requirement that the outer SNI matches ECHConfig.public_name, so long as this change doesn't impact interoperability.\r\n",
       "createdAt": "2020-11-03T01:28:48Z",
-      "updatedAt": "2020-11-17T08:38:59Z",
+      "updatedAt": "2020-11-19T12:09:27Z",
       "closedAt": null,
       "comments": []
     },
@@ -8176,7 +8172,7 @@
       "labels": [],
       "body": "I just noticed this as I was pondering our various HRR issues. RFC8446, section 4.1.2 says:\r\n\r\n> [...] The client will also send a ClientHello when the server has responded to its ClientHello with a HelloRetryRequest.  In that case, the client MUST send the same ClientHello without modification, except as follows:\r\n>\r\n> * [...various cases regarding existing extensions...]\r\n>\r\n> *  Other modifications that may be allowed by an extension defined in the future *and present in the HelloRetryRequest*.\r\n\r\nhttps://tools.ietf.org/html/rfc8446#section-4.1.2\r\n\r\nThe \"and present in the HelloRetryRequest\" portion is fun. In RFC8446 as written, we're not allowed to change the `encrypted_client_hello` extension on the second ClientHello unless the server sent `encrypted_client_hello` in HelloRetryRequest, which it doesn't. With the protocol as-is, it seems we'll at least need some text to deal with the contradiction.\r\n\r\nThe impact is practice is thankfully limited. If the servers does not enforce consistency between the two ClientHellos, it doesn't matter. (They're not required to, but they're not explicitly forbidden from it either, and a stateless server may need to enforce some minimum consistency to avoid getting into a broken state.) If a server does, ECH's behavior on HRR will break it. Such a server is supposed to handshake with ClientHelloOuter, so it just affects the retry flow. That's maybe okay, but mildly annoying. Administrators using server software that checks need to know to first upgrade to a version that doesn't check before trying to deploy ECH.\r\n\r\nWe can also add an ECH extension to HRR. Then, on ECH-reject + HRR, the server perhaps wouldn't send the extension and the client would be required to replay the extension. This is a waste in many ways, but would work. This would break don't stick out, but some threat models, don't stick out with HRR is hopeless anyway. (See https://github.com/tlswg/draft-ietf-tls-esni/pull/352#issuecomment-721824226.) It would also be weirdly asymmetric between ECH and SH.\r\n\r\nThat said, this constraint is also pretty obnoxious. For instance, #313 currently adds a new padding extension codepoint, because the old one isn't defined for other messages. However, the RFC8446 allowance only works for the existing padding code point, so you don't want to send any other code points in ClientHello, lest the server force you to keep it unchanged in ClientHello2. So maybe we should confirm no servers did the fully strict check and undo that constraint? (Although, for #313, I personally favor the padding message strategy anyway.)",
       "createdAt": "2020-11-06T21:05:33Z",
-      "updatedAt": "2020-11-18T00:10:23Z",
+      "updatedAt": "2020-11-19T12:09:28Z",
       "closedAt": null,
       "comments": [
         {
@@ -33138,6 +33134,34 @@
           "comments": []
         }
       ]
+    },
+    {
+      "number": 363,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTI0OTYxNzU1",
+      "title": "Move some text around in Server Behavior.",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/363",
+      "state": "MERGED",
+      "author": "davidben",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "The text for servers rejecting both extensions present is under Backend\r\nServer, but the Server Behavior text gates that section under just the\r\none extension. Likewise, the client-facing server text allows for both\r\nextensions to be present.\r\n\r\nMove the illegal_parameter text around and write out the four cases.",
+      "createdAt": "2020-11-20T21:29:49Z",
+      "updatedAt": "2020-11-20T22:10:31Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "8b2dd889525ac50c703d9c3267d1c61db6d7a81c",
+      "headRepository": "davidben/draft-ietf-tls-esni",
+      "headRefName": "both-xtns",
+      "headRefOid": "771c948abfff773df1044ff86f8640834a00aa16",
+      "closedAt": "2020-11-20T22:10:31Z",
+      "mergedAt": "2020-11-20T22:10:31Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "44aab0c68e1d39f41377db648aa1e6bf0481c483"
+      },
+      "comments": [],
+      "reviews": []
     }
   ]
 }
