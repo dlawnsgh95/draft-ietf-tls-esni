@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-11-20T22:11:01.891860+00:00",
+  "timestamp": "2020-11-21T18:05:32.637383+00:00",
   "repo": "tlswg/draft-ietf-tls-esni",
   "labels": [
     {
@@ -33160,6 +33160,89 @@
       "mergeCommit": {
         "oid": "44aab0c68e1d39f41377db648aa1e6bf0481c483"
       },
+      "comments": [],
+      "reviews": []
+    },
+    {
+      "number": 364,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTI0OTk3Nzcz",
+      "title": "Remove backticks from empty string literal.",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/364",
+      "state": "MERGED",
+      "author": "dmcardle",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "The backtick-quoted empty string translates to \"\"\"\" in the text output.",
+      "createdAt": "2020-11-20T22:59:53Z",
+      "updatedAt": "2020-11-21T18:04:52Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "44aab0c68e1d39f41377db648aa1e6bf0481c483",
+      "headRepository": "dmcardle/draft-ietf-tls-esni",
+      "headRefName": "master",
+      "headRefOid": "c8835c0f1b68bfbe1dfdaf33bb5d7d42d4c3df35",
+      "closedAt": "2020-11-21T18:04:52Z",
+      "mergedAt": "2020-11-21T18:04:51Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "13f66e2e01999ccfa341d47f292416fe9f01f772"
+      },
+      "comments": [
+        {
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "Not sure if this is the best solution, but the quadruple quote in the txt is goofy.",
+          "createdAt": "2020-11-20T23:04:04Z",
+          "updatedAt": "2020-11-20T23:04:04Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "This seems fine, yeah. Thanks for catching it!",
+          "createdAt": "2020-11-21T18:04:48Z",
+          "updatedAt": "2020-11-21T18:04:48Z"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM1OTg0MzY2",
+          "commit": {
+            "abbreviatedOid": "c8835c0"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-21T18:04:39Z",
+          "updatedAt": "2020-11-21T18:04:39Z",
+          "comments": []
+        }
+      ]
+    },
+    {
+      "number": 365,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTI1MDE3NzMy",
+      "title": "Quick editorial pass.",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/365",
+      "state": "OPEN",
+      "author": "dmcardle",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "Tried to clarify some text, PTAL :)\r\n\r\nFor the backend server, I think the `ClientHelloInner..ServerHelloECHConf` notation is a little confusing (pedantically, shouldn't it be `...`?). Can't we just concatenate the two messages and call it a day?",
+      "createdAt": "2020-11-21T00:05:45Z",
+      "updatedAt": "2020-11-21T00:15:01Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "44aab0c68e1d39f41377db648aa1e6bf0481c483",
+      "headRepository": "dmcardle/draft-ietf-tls-esni",
+      "headRefName": "dan-edits",
+      "headRefOid": "f6921856ed8db068fbc161242f6f660149d5b649",
+      "closedAt": null,
+      "mergedAt": null,
+      "mergedBy": null,
+      "mergeCommit": null,
       "comments": [],
       "reviews": []
     }
