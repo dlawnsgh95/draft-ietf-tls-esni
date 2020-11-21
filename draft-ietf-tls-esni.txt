@@ -5,11 +5,11 @@
 tls                                                          E. Rescorla
 Internet-Draft                                                RTFM, Inc.
 Intended status: Standards Track                                  K. Oku
-Expires: 24 May 2021                                              Fastly
+Expires: 25 May 2021                                              Fastly
                                                              N. Sullivan
                                                                C.A. Wood
                                                               Cloudflare
-                                                        20 November 2020
+                                                        21 November 2020
 
 
                        TLS Encrypted Client Hello
@@ -35,7 +35,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 24 May 2021.
+   This Internet-Draft will expire on 25 May 2021.
 
 Copyright Notice
 
@@ -407,8 +407,8 @@ Table of Contents
       config), "tls ech config id", 8)", unless it is optional for an
       application; see Section 10.4. "config" is the "ECHConfig"
       structure.  "Extract" and "Expand" are as specified by the cipher
-      suite KDF.  (Passing the literal """" as the salt is interpreted
-      by "Extract" as no salt being provided.)
+      suite KDF.  (Passing the literal "" as the salt is interpreted by
+      "Extract" as no salt being provided.)
 
    enc  The HPKE encapsulated key, used by servers to decrypt the
       corresponding "payload" field.
