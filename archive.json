@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-11-21T18:05:32.637383+00:00",
+  "timestamp": "2020-11-23T22:14:11.161283+00:00",
   "repo": "tlswg/draft-ietf-tls-esni",
   "labels": [
     {
@@ -33232,7 +33232,7 @@
       "labels": [],
       "body": "Tried to clarify some text, PTAL :)\r\n\r\nFor the backend server, I think the `ClientHelloInner..ServerHelloECHConf` notation is a little confusing (pedantically, shouldn't it be `...`?). Can't we just concatenate the two messages and call it a day?",
       "createdAt": "2020-11-21T00:05:45Z",
-      "updatedAt": "2020-11-21T00:15:01Z",
+      "updatedAt": "2020-11-23T19:06:56Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
       "baseRefOid": "44aab0c68e1d39f41377db648aa1e6bf0481c483",
@@ -33244,7 +33244,189 @@
       "mergedBy": null,
       "mergeCommit": null,
       "comments": [],
-      "reviews": []
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM1OTg0NjMy",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "The simplified notation LGTM. @cjpatton, please have look!",
+          "createdAt": "2020-11-21T18:08:16Z",
+          "updatedAt": "2020-11-21T18:08:16Z",
+          "comments": []
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2NjAyNDc1",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "CHANGES_REQUESTED",
+          "body": "- I like `..` because it's consistent with RFC 8446 (See the key schedule section.)\r\n- `make` fails because of lines that exceed 80 characters.",
+          "createdAt": "2020-11-23T15:49:13Z",
+          "updatedAt": "2020-11-23T15:52:02Z",
+          "comments": [
+            {
+              "originalPosition": 134,
+              "body": "Actually, the `..` notation is meant to denote the sequence of messages between `ClientHelloInner` and `ServerHelloECHConf`. This sequence is empty here, but I think we should use the notation nonetheless, in order to be consistent with RFC8446.",
+              "createdAt": "2020-11-23T15:49:14Z",
+              "updatedAt": "2020-11-23T15:52:02Z"
+            },
+            {
+              "originalPosition": 141,
+              "body": "If we revert the above change, don't forget to revert this change as well.",
+              "createdAt": "2020-11-23T15:49:47Z",
+              "updatedAt": "2020-11-23T15:52:02Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2NjA2ODU5",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-23T15:53:42Z",
+          "updatedAt": "2020-11-23T15:53:42Z",
+          "comments": [
+            {
+              "originalPosition": 134,
+              "body": "I don\u2019t think this is necessary. || is more clear in this context given that the sequence is always empty.",
+              "createdAt": "2020-11-23T15:53:42Z",
+              "updatedAt": "2020-11-23T15:53:43Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2NjUzNDY4",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-23T16:40:25Z",
+          "updatedAt": "2020-11-23T16:40:26Z",
+          "comments": [
+            {
+              "originalPosition": 134,
+              "body": "What about incorporating the CH1 hash? Isn't that also something that's implied by the `..` notation?",
+              "createdAt": "2020-11-23T16:40:26Z",
+              "updatedAt": "2020-11-23T16:40:26Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2NjkyNjI4",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-23T17:25:01Z",
+          "updatedAt": "2020-11-23T17:25:02Z",
+          "comments": [
+            {
+              "originalPosition": 46,
+              "body": "In this section, it might be clearer to refer to `ECHConfig.contents.kem_id`, since `ECHConfig` has been defined, but `ECHConfigContents` only implicitly refers to `ECHConfig.contents`. (Here and below.)",
+              "createdAt": "2020-11-23T17:25:02Z",
+              "updatedAt": "2020-11-23T19:06:56Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2NzM4NTUw",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-23T18:26:02Z",
+          "updatedAt": "2020-11-23T18:26:03Z",
+          "comments": [
+            {
+              "originalPosition": 134,
+              "body": "In other words, this needs to denotes the whole transcript from ClientHelloInner to ServerHelloECHConf, including the messages on the HRR path.",
+              "createdAt": "2020-11-23T18:26:02Z",
+              "updatedAt": "2020-11-23T18:26:15Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2NzYyOTgz",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-23T19:01:17Z",
+          "updatedAt": "2020-11-23T19:01:17Z",
+          "comments": [
+            {
+              "originalPosition": 134,
+              "body": "(@chris-wood and I spoke offline and we agreed that the `..` notation should stay as-is.)",
+              "createdAt": "2020-11-23T19:01:17Z",
+              "updatedAt": "2020-11-23T19:01:17Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 366,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTI1OTE1MDIz",
+      "title": "Editorial pass and advance ECHConfig.version to ECH-09",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/366",
+      "state": "MERGED",
+      "author": "cjpatton",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "",
+      "createdAt": "2020-11-23T18:22:49Z",
+      "updatedAt": "2020-11-23T22:13:39Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "13f66e2e01999ccfa341d47f292416fe9f01f772",
+      "headRepository": "cjpatton/draft-ietf-tls-esni",
+      "headRefName": "cjpatton/edit",
+      "headRefOid": "3078ffac538fe8b2fe8dc151a5d2f1f308336cc4",
+      "closedAt": "2020-11-23T22:13:39Z",
+      "mergedAt": "2020-11-23T22:13:39Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "7cf17ec836c19bf05778f693b5be935331317713"
+      },
+      "comments": [],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2ODg2MzQx",
+          "commit": {
+            "abbreviatedOid": "3078ffa"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-23T22:13:34Z",
+          "updatedAt": "2020-11-23T22:13:34Z",
+          "comments": []
+        }
+      ]
     }
   ]
 }
