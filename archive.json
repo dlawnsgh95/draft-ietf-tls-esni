@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-11-23T22:14:11.161283+00:00",
+  "timestamp": "2020-11-24T12:51:02.578437+00:00",
   "repo": "tlswg/draft-ietf-tls-esni",
   "labels": [
     {
@@ -33225,24 +33225,26 @@
       "id": "MDExOlB1bGxSZXF1ZXN0NTI1MDE3NzMy",
       "title": "Quick editorial pass.",
       "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/365",
-      "state": "OPEN",
+      "state": "MERGED",
       "author": "dmcardle",
       "authorAssociation": "CONTRIBUTOR",
       "assignees": [],
       "labels": [],
       "body": "Tried to clarify some text, PTAL :)\r\n\r\nFor the backend server, I think the `ClientHelloInner..ServerHelloECHConf` notation is a little confusing (pedantically, shouldn't it be `...`?). Can't we just concatenate the two messages and call it a day?",
       "createdAt": "2020-11-21T00:05:45Z",
-      "updatedAt": "2020-11-23T19:06:56Z",
+      "updatedAt": "2020-11-24T12:50:25Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
-      "baseRefOid": "44aab0c68e1d39f41377db648aa1e6bf0481c483",
+      "baseRefOid": "48662e26fbdc766471a211eb6038a742736fd69b",
       "headRepository": "dmcardle/draft-ietf-tls-esni",
       "headRefName": "dan-edits",
-      "headRefOid": "f6921856ed8db068fbc161242f6f660149d5b649",
-      "closedAt": null,
-      "mergedAt": null,
-      "mergedBy": null,
-      "mergeCommit": null,
+      "headRefOid": "efafbd8a696a35056df3540b746edd669eb3e9eb",
+      "closedAt": "2020-11-24T12:50:25Z",
+      "mergedAt": "2020-11-24T12:50:25Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "da3338fbcf62adb832445b8b3ce2c741f8f460b4"
+      },
       "comments": [],
       "reviews": [
         {
@@ -33274,13 +33276,13 @@
               "originalPosition": 134,
               "body": "Actually, the `..` notation is meant to denote the sequence of messages between `ClientHelloInner` and `ServerHelloECHConf`. This sequence is empty here, but I think we should use the notation nonetheless, in order to be consistent with RFC8446.",
               "createdAt": "2020-11-23T15:49:14Z",
-              "updatedAt": "2020-11-23T15:52:02Z"
+              "updatedAt": "2020-11-24T02:26:54Z"
             },
             {
               "originalPosition": 141,
               "body": "If we revert the above change, don't forget to revert this change as well.",
               "createdAt": "2020-11-23T15:49:47Z",
-              "updatedAt": "2020-11-23T15:52:02Z"
+              "updatedAt": "2020-11-24T02:26:54Z"
             }
           ]
         },
@@ -33300,7 +33302,7 @@
               "originalPosition": 134,
               "body": "I don\u2019t think this is necessary. || is more clear in this context given that the sequence is always empty.",
               "createdAt": "2020-11-23T15:53:42Z",
-              "updatedAt": "2020-11-23T15:53:43Z"
+              "updatedAt": "2020-11-24T02:26:54Z"
             }
           ]
         },
@@ -33320,7 +33322,7 @@
               "originalPosition": 134,
               "body": "What about incorporating the CH1 hash? Isn't that also something that's implied by the `..` notation?",
               "createdAt": "2020-11-23T16:40:26Z",
-              "updatedAt": "2020-11-23T16:40:26Z"
+              "updatedAt": "2020-11-24T02:26:54Z"
             }
           ]
         },
@@ -33340,7 +33342,7 @@
               "originalPosition": 46,
               "body": "In this section, it might be clearer to refer to `ECHConfig.contents.kem_id`, since `ECHConfig` has been defined, but `ECHConfigContents` only implicitly refers to `ECHConfig.contents`. (Here and below.)",
               "createdAt": "2020-11-23T17:25:02Z",
-              "updatedAt": "2020-11-23T19:06:56Z"
+              "updatedAt": "2020-11-24T02:26:54Z"
             }
           ]
         },
@@ -33360,7 +33362,7 @@
               "originalPosition": 134,
               "body": "In other words, this needs to denotes the whole transcript from ClientHelloInner to ServerHelloECHConf, including the messages on the HRR path.",
               "createdAt": "2020-11-23T18:26:02Z",
-              "updatedAt": "2020-11-23T18:26:15Z"
+              "updatedAt": "2020-11-24T02:26:54Z"
             }
           ]
         },
@@ -33380,9 +33382,266 @@
               "originalPosition": 134,
               "body": "(@chris-wood and I spoke offline and we agreed that the `..` notation should stay as-is.)",
               "createdAt": "2020-11-23T19:01:17Z",
-              "updatedAt": "2020-11-23T19:01:17Z"
+              "updatedAt": "2020-11-24T02:26:54Z"
             }
           ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTE3Mjc4",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-23T23:10:58Z",
+          "updatedAt": "2020-11-23T23:10:58Z",
+          "comments": [
+            {
+              "originalPosition": 134,
+              "body": "I find the range syntax a bit confusing here. If there were messages in between, it's not clear to me which variant of those messages would be selected, or whether some transformation would be applied to them.\r\n\r\nI don't feel really strongly about this. Happy to revert it, but to be fully pedantic, I want to point out that RFC 8446 uses three dots between messages. I'll go ahead and use three dots here, unless two dots has a different meaning that I don't understand.",
+              "createdAt": "2020-11-23T23:10:58Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTE4Nzkx",
+          "commit": {
+            "abbreviatedOid": "f692185"
+          },
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-23T23:14:13Z",
+          "updatedAt": "2020-11-23T23:14:14Z",
+          "comments": [
+            {
+              "originalPosition": 141,
+              "body": "Done!",
+              "createdAt": "2020-11-23T23:14:14Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTI2ODI2",
+          "commit": {
+            "abbreviatedOid": "81a03a7"
+          },
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-23T23:32:19Z",
+          "updatedAt": "2020-11-23T23:32:20Z",
+          "comments": [
+            {
+              "originalPosition": 46,
+              "body": "Agreed, made this change for the whole \"Offering ECH\" section.",
+              "createdAt": "2020-11-23T23:32:19Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTQ3OTQw",
+          "commit": {
+            "abbreviatedOid": "81a03a7"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-24T00:25:01Z",
+          "updatedAt": "2020-11-24T00:25:01Z",
+          "comments": [
+            {
+              "originalPosition": 134,
+              "body": "Oops, three dots is right! https://tools.ietf.org/html/rfc8446#section-7.1\r\n\r\nI think my dyslexic brain is removing  a dot. ",
+              "createdAt": "2020-11-24T00:25:01Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTQ4NTky",
+          "commit": {
+            "abbreviatedOid": "81a03a7"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "CHANGES_REQUESTED",
+          "body": "Looks good, modulo minor nits! ",
+          "createdAt": "2020-11-24T00:26:46Z",
+          "updatedAt": "2020-11-24T00:29:24Z",
+          "comments": [
+            {
+              "originalPosition": 87,
+              "body": "Is `ECHConfig.config.maximum_name_length` more appropriate here?",
+              "createdAt": "2020-11-24T00:26:47Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            },
+            {
+              "originalPosition": 91,
+              "body": "`ECHConfig.contents.maximum_name_length`?",
+              "createdAt": "2020-11-24T00:27:00Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            },
+            {
+              "originalPosition": 100,
+              "body": "`ECHConfig.contents.public_name`?",
+              "createdAt": "2020-11-24T00:27:12Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            },
+            {
+              "originalPosition": 136,
+              "body": "Nice catch!",
+              "createdAt": "2020-11-24T00:27:56Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            },
+            {
+              "originalPosition": 49,
+              "body": "Do these lines break 80 characters?",
+              "createdAt": "2020-11-24T00:28:41Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTYxNzU0",
+          "commit": {
+            "abbreviatedOid": "81a03a7"
+          },
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-24T01:01:31Z",
+          "updatedAt": "2020-11-24T01:01:31Z",
+          "comments": [
+            {
+              "originalPosition": 49,
+              "body": "Yep, good catch! Reflowing the paragraph in a new commit.",
+              "createdAt": "2020-11-24T01:01:31Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTY1MTAz",
+          "commit": {
+            "abbreviatedOid": "0e9bc1a"
+          },
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-24T01:10:32Z",
+          "updatedAt": "2020-11-24T01:10:33Z",
+          "comments": [
+            {
+              "originalPosition": 100,
+              "body": "Done",
+              "createdAt": "2020-11-24T01:10:32Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTY1MTIy",
+          "commit": {
+            "abbreviatedOid": "0e9bc1a"
+          },
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-24T01:10:36Z",
+          "updatedAt": "2020-11-24T01:10:37Z",
+          "comments": [
+            {
+              "originalPosition": 91,
+              "body": "Done",
+              "createdAt": "2020-11-24T01:10:36Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTY1MTkx",
+          "commit": {
+            "abbreviatedOid": "0e9bc1a"
+          },
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-24T01:10:48Z",
+          "updatedAt": "2020-11-24T01:10:48Z",
+          "comments": [
+            {
+              "originalPosition": 87,
+              "body": "Seems reasonable, done.",
+              "createdAt": "2020-11-24T01:10:48Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM3MDA0MTE5",
+          "commit": {
+            "abbreviatedOid": "0e9bc1a"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "CHANGES_REQUESTED",
+          "body": "",
+          "createdAt": "2020-11-24T01:40:43Z",
+          "updatedAt": "2020-11-24T01:41:21Z",
+          "comments": [
+            {
+              "originalPosition": 84,
+              "body": "This line and the one below it are longer than 80 characters. (Sorry if this is annoying ... lines that are longer than 80 characters cause `make` to fail. In fact, you should be getting emails from CI telling you that the build is failing.)",
+              "createdAt": "2020-11-24T01:40:43Z",
+              "updatedAt": "2020-11-24T02:26:54Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM3MDI5Mzcz",
+          "commit": {
+            "abbreviatedOid": "efafbd8"
+          },
+          "author": "dmcardle",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-11-24T02:27:34Z",
+          "updatedAt": "2020-11-24T02:27:34Z",
+          "comments": [
+            {
+              "originalPosition": 84,
+              "body": "Aha, I hadn't run make in a few commits, my bad. Fixed now.",
+              "createdAt": "2020-11-24T02:27:34Z",
+              "updatedAt": "2020-11-24T02:27:35Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM3MDM2OTE1",
+          "commit": {
+            "abbreviatedOid": "efafbd8"
+          },
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "APPROVED",
+          "body": "Thanks!",
+          "createdAt": "2020-11-24T02:48:18Z",
+          "updatedAt": "2020-11-24T02:48:18Z",
+          "comments": []
         }
       ]
     },
@@ -33424,6 +33683,96 @@
           "body": "",
           "createdAt": "2020-11-23T22:13:34Z",
           "updatedAt": "2020-11-23T22:13:34Z",
+          "comments": []
+        }
+      ]
+    },
+    {
+      "number": 367,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTI2MDQ3ODEx",
+      "title": "Specify the backend server's behavior when \"ech_is_inner\" is not empty",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/367",
+      "state": "MERGED",
+      "author": "cjpatton",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "~It's sufficient to ignore it, I think.~ The backend server enforces the extension's emptiness. ",
+      "createdAt": "2020-11-23T23:01:06Z",
+      "updatedAt": "2020-11-23T23:21:50Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "7cf17ec836c19bf05778f693b5be935331317713",
+      "headRepository": "cjpatton/draft-ietf-tls-esni",
+      "headRefName": "cjpatton/nits",
+      "headRefOid": "d1a244474073af56b816553d94cc6a6c0d995a97",
+      "closedAt": "2020-11-23T23:21:49Z",
+      "mergedAt": "2020-11-23T23:21:49Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "48662e26fbdc766471a211eb6038a742736fd69b"
+      },
+      "comments": [],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTIyMjM5",
+          "commit": {
+            "abbreviatedOid": "d1a2444"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-23T23:21:45Z",
+          "updatedAt": "2020-11-23T23:21:45Z",
+          "comments": []
+        }
+      ]
+    },
+    {
+      "number": 368,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTI2MDc1MzM3",
+      "title": "Fix ClientHelloOuterAAD.outer_hello length",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/368",
+      "state": "OPEN",
+      "author": "cjpatton",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "Per RFC8446, Section 4, handshake messages, including ClientHello, may\r\nbe up to 2^24-1 bytes in length.",
+      "createdAt": "2020-11-24T00:21:41Z",
+      "updatedAt": "2020-11-24T00:35:15Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "48662e26fbdc766471a211eb6038a742736fd69b",
+      "headRepository": "cjpatton/draft-ietf-tls-esni",
+      "headRefName": "cjpatton/inner-hello-aad-length",
+      "headRefOid": "96874f4420b02045c82e53e4ac596cf95784d282",
+      "closedAt": null,
+      "mergedAt": null,
+      "mergedBy": null,
+      "mergeCommit": null,
+      "comments": [
+        {
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "(I think the maximum possible ClientHello is 2^17 bytes plus some loose change, but who's counting? :-) 2^24-1 is less thinking.)",
+          "createdAt": "2020-11-24T00:34:52Z",
+          "updatedAt": "2020-11-24T00:35:15Z"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTM2OTQ3MjE2",
+          "commit": {
+            "abbreviatedOid": "96874f4"
+          },
+          "author": "davidben",
+          "authorAssociation": "CONTRIBUTOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-24T00:23:11Z",
+          "updatedAt": "2020-11-24T00:23:11Z",
           "comments": []
         }
       ]
