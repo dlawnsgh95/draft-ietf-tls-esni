@@ -5,11 +5,11 @@
 tls                                                          E. Rescorla
 Internet-Draft                                                RTFM, Inc.
 Intended status: Standards Track                                  K. Oku
-Expires: 27 May 2021                                              Fastly
+Expires: 28 May 2021                                              Fastly
                                                              N. Sullivan
                                                                C.A. Wood
                                                               Cloudflare
-                                                        23 November 2020
+                                                        24 November 2020
 
 
                        TLS Encrypted Client Hello
@@ -35,7 +35,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 27 May 2021.
+   This Internet-Draft will expire on 28 May 2021.
 
 Copyright Notice
 
@@ -350,8 +350,8 @@ Table of Contents
       consideration when generating a ClientHello message.  These are
       described below (Section 4.1).
 
-   The client-facing server advertises a sequence ECH configurations to
-   clients, serialized as follows.
+   The client-facing server advertises a sequence of ECH configurations
+   to clients, serialized as follows.
 
        ECHConfig ECHConfigs<1..2^16-1>;
 
@@ -399,7 +399,7 @@ Table of Contents
 
    cipher_suite  The cipher suite used to encrypt ClientHelloInner.
       This MUST match a value provided in the corresponding
-      "ECHConfig.cipher_suites" list.
+      "ECHConfigContents.cipher_suites" list.
 
    config_id  The configuration identifier, equal to "Expand(Extract("",
       config), "tls ech config id", 8)", unless it is optional for an
@@ -426,18 +426,17 @@ Table of Contents
       ECHConfig structures, in decreasing order of preference, to be
       used by the client in subsequent connection attempts.
 
-   This document also defines the "ech_required" alert, which clients
+   This document also defines the "ech_required" alert, which the client
    MUST send when it offered an "encrypted_client_hello" extension that
    was not accepted by the server.  (See Section 11.2.)
 
 5.1.  Encoding the ClientHelloInner
 
-   Some TLS 1.3 extensions can be quite large and having them both in
-   ClientHelloInner and ClientHelloOuter will lead to a very large
-   overall size.  One particularly pathological example is "key_share"
-   with post-quantum algorithms.  In order to reduce the impact of
-   duplicated extensions, the client may use the "ech_outer_extensions"
-   extension.
+   Some TLS 1.3 extensions can be quite large, thus repeating them in
+   the ClientHelloInner and ClientHelloOuter can lead to an excessive
+   overall size.  One pathological example is "key_share" with post-
+   quantum algorithms.  To reduce the impact of duplicated extensions,
+   the client may use the "ech_outer_extensions" extension.
 
        enum {
           ech_outer_extensions(0xfd00), (65535)
@@ -519,11 +518,12 @@ Table of Contents
 
    To offer ECH, the client first chooses a suitable ECH configuration.
    To determine if a given "ECHConfig" is suitable, it checks that it
-   supports the KEM algorithm identified by "ECHConfig.kem_id", at least
-   one KDF/AEAD algorithm identified by "ECHConfig.cipher_suites", and
-   the version of ECH indicated by "ECHConfig.version".  Once a suitable
-   configuration is found, the client selects the cipher suite it will
-   use for encryption.  It MUST NOT choose a cipher suite or version not
+   supports the KEM algorithm identified by "ECHConfig.contents.kem_id",
+   at least one KDF/AEAD algorithm identified by
+   "ECHConfig.contents.cipher_suites", and the version of ECH indicated
+   by "ECHConfig.contents.version".  Once a suitable configuration is
+   found, the client selects the cipher suite it will use for
+   encryption.  It MUST NOT choose a cipher suite or version not
    advertised by the configuration.  If no compatible configuration is
    found, then the client SHOULD proceed as described in Section 6.2.
 
@@ -576,8 +576,8 @@ Table of Contents
    6.  It MUST include an "encrypted_client_hello" extension with a
        payload constructed as described below.
 
-   7.  The value of "ECHConfig.public_name" MUST be placed in the
-       "server_name" extension.
+   7.  The value of "ECHConfig.contents.public_name" MUST be placed in
+       the "server_name" extension.
 
    8.  It MUST NOT include the "pre_shared_key" extension.  (See
        Section 10.10.3.)
@@ -605,18 +605,18 @@ Table of Contents
    The client then generates the HPKE encryption context and computes
    the encapsulated key, context, and payload as:
 
-       pkR = Deserialize(ECHConfig.public_key)
+       pkR = Deserialize(ECHConfig.contents.public_key)
        enc, context = SetupBaseS(pkR,
                                  "tls ech" || 0x00 || ECHConfig)
        payload = context.Seal(ClientHelloOuterAAD,
                               EncodedClientHelloInner)
 
    Note that the HPKE functions Deserialize and SetupBaseS are those
-   which match "ECHConfig.kem_id" and the AEAD/KDF used with "context"
-   are those which match the client's chosen preference from
-   "ECHConfig.cipher_suites".  The "info" parameter to SetupBaseS is the
-   concatenation of "tls ech", a zero byte, and the serialized
-   ECHConfig.
+   which match "ECHConfig.contents.kem_id" and the AEAD/KDF used with
+   "context" are those which match the client's chosen preference from
+   "ECHConfig.contents.cipher_suites".  The "info" parameter to
+   SetupBaseS is the concatenation of "tls ech", a zero byte, and the
+   serialized ECHConfig.
 
    The value of the "encrypted_client_hello" extension in the
    ClientHelloOuter is a "ClientECH" with the following values:
@@ -672,11 +672,12 @@ Table of Contents
    In contrast, clients do not know the longest SNI value in the client-
    facing server's anonymity set without server input.  For the
    "server_name" extension with length D, clients SHOULD use the
-   server's length hint L (ECHCOnfig.maximum_name_length) when computing
-   the padding as follows:
+   server's length hint L (ECHConfig.contents.maximum_name_length) when
+   computing the padding as follows:
 
    1.  If L >= D, add L - D bytes of padding.  This rounds to the
-       server's advertised hint, i.e., ECHConfig.maximum_name_length.
+       server's advertised hint, i.e.,
+       ECHConfig.contents.maximum_name_length.
 
    2.  Otherwise, let P = 31 - ((D - 1) % 32), and add P bytes of
        padding, plus an additional 32 bytes if D + P < L + 32.  This
@@ -709,10 +710,10 @@ Table of Contents
 6.1.3.2.  Rejected ECH
 
    If the server used ClientHelloOuter, the client proceeds with the
-   handshake, authenticating for ECHConfig.public_name as described in
-   Section 6.1.3.3.  If authentication or the handshake fails, the
-   client MUST return a failure to the calling application.  It MUST NOT
-   use the retry keys.
+   handshake, authenticating for ECHConfig.contents.public_name as
+   described in Section 6.1.3.3.  If authentication or the handshake
+   fails, the client MUST return a failure to the calling application.
+   It MUST NOT use the retry keys.
 
    Otherwise, when the handshake completes successfully with the public
    name authenticated, the client MUST abort the connection with an
@@ -741,12 +742,12 @@ Table of Contents
    If the server negotiates an earlier version of TLS, or if it does not
    provide an "encrypted_client_hello" extension in EncryptedExtensions,
    the client proceeds with the handshake, authenticating for
-   ECHConfigContents.public_name as described in Section 6.1.3.3.  If an
-   earlier version was negotiated, the client MUST NOT enable the False
-   Start optimization [RFC7918] for this handshake.  If authentication
-   or the handshake fails, the client MUST return a failure to the
-   calling application.  It MUST NOT treat this as a secure signal to
-   disable ECH.
+   ECHConfig.contents.public_name as described in Section 6.1.3.3.  If
+   an earlier version was negotiated, the client MUST NOT enable the
+   False Start optimization [RFC7918] for this handshake.  If
+   authentication or the handshake fails, the client MUST return a
+   failure to the calling application.  It MUST NOT treat this as a
+   secure signal to disable ECH.
 
    Otherwise, when the handshake completes successfully with the public
    name authenticated, the client MUST abort the connection with an
@@ -768,7 +769,7 @@ Table of Contents
    public name, as follows:
 
    *  The client MUST verify that the certificate is valid for
-      ECHConfigContents.public_name.  If invalid, it MUST abort the
+      ECHConfig.contents.public_name.  If invalid, it MUST abort the
       connection with the appropriate alert.
 
    *  If the server requests a client certificate, the client MUST
@@ -879,7 +880,8 @@ Table of Contents
    the first ClientHello.
 
    [[OPEN ISSUE: The above doesn't match HRR handling for either ECH
-   acceptance or rejection.  See issue #358.]]
+   acceptance or rejection.  See issue https://github.com/tlswg/draft-
+   ietf-tls-esni/issues/358.]]
 
    If the server sends an "encrypted_client_hello" extension, the client
    MUST check the extension syntactically and abort the connection with
@@ -998,7 +1000,7 @@ Table of Contents
 
    After sending or forwarding a HelloRetryRequest, the client-facing
    server does not repeat the steps in Section 7.1 with the second
-   ClientHelloOuter.  Instead it continues with the ECHConfig selection
+   ClientHelloOuter.  Instead, it continues with the ECHConfig selection
    from the first ClientHelloOuter as follows:
 
    If the client-facing server accepted ECH, it checks the second
@@ -1035,7 +1037,8 @@ Table of Contents
    [[OPEN ISSUE: If the client-facing server implements stateless HRR,
    it has no way to send a cookie, short of as-yet-unspecified
    integration with the backend server.  Stateful HRR on the client-
-   facing server works fine, however.  See issue #333.]]
+   facing server works fine, however.  See issue
+   https://github.com/tlswg/draft-ietf-tls-esni/issues/333.]]
 
 7.2.  Backend Server
 
@@ -1052,10 +1055,10 @@ Table of Contents
        accept_confirmation =
            Derive-Secret(Handshake Secret,
                          "ech accept confirmation",
-                         ClientHelloInner..ServerHelloECHConf)
+                         ClientHelloInner...ServerHelloECHConf)
 
    where Derive-Secret and Handshake Secret are as specified in
-   [RFC8446], Section 7.1, and ClientHelloInner..ServerHelloECHConf
+   [RFC8446], Section 7.1, and ClientHelloInner...ServerHelloECHConf
    refers to the sequence of handshake messages beginning with the first
    ClientHello and ending with ServerHelloECHConf.  Finally, the backend
    server constructs its ServerHello message so that it is equal to
