@@ -5,11 +5,11 @@
 tls                                                          E. Rescorla
 Internet-Draft                                                RTFM, Inc.
 Intended status: Standards Track                                  K. Oku
-Expires: 28 May 2021                                              Fastly
+Expires: 5 June 2021                                              Fastly
                                                              N. Sullivan
                                                                C.A. Wood
                                                               Cloudflare
-                                                        24 November 2020
+                                                         2 December 2020
 
 
                        TLS Encrypted Client Hello
@@ -35,7 +35,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 28 May 2021.
+   This Internet-Draft will expire on 5 June 2021.
 
 Copyright Notice
 
@@ -497,6 +497,8 @@ Table of Contents
    fields of the payload of the "encrypted_client_hello" extension.  The
    last parameter, "outer_hello", is computed by serializing
    ClientHelloOuter with the "encrypted_client_hello" extension removed.
+   Note this does not include the four-byte header included in the
+   Handshake structure.
 
    Note the decompression process in Section 5.1 forbids
    "encrypted_client_hello" in OuterExtensions.  This ensures the
