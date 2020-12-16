@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-12-02T02:56:38.510778+00:00",
+  "timestamp": "2020-12-16T14:29:30.288113+00:00",
   "repo": "tlswg/draft-ietf-tls-esni",
   "labels": [
     {
@@ -8104,7 +8104,7 @@
       "labels": [],
       "body": "The primary \"don't stick out\" [RFC8744] consideration for ECH is to ensure that the new extension does not trigger middlebox misbehavior. To accomplish this, the draft specifies two protocol variants: in the \"real-ECH\" protocol the client offers the ECH extension, which is processed by the server; in the \"grease-ECH\" protocol, the client generates a dummy ECH extension, which is ignored or rejected by the server. Grease-ECH is designed to look enough like real-ECH so that middleboxes do not differentiate the latter from the former, the idea being that if grease-ECH can be deployed without triggering middlebox misbehavior, then real-ECH ought to be deployable, too.\r\n\r\nBut what do we mean when we say grease-ECH should \"look like\" real-ECH? In ECH-08 the stated goal is \"to hide, to some extent, **(a)** whether or not a specific server supports ECH and **(b)** whether or not ECH was accepted for a particular connection\" [ECH-08, [Sec.10.1](https://tools.ietf.org/html/draft-ietf-tls-esni-08#section-10.1)]. These goals are hard to meet. First, an attacker can violate **(a)** by simply running grease-ECH with the server to see if it returns retry configs. Second, there are a number of ways to distinguish real-ECH from grease-ECH, thereby violating **(b)**:\r\n1. @huitema's [client-reaction attack](https://mailarchive.ietf.org/arch/msg/tls/EAeKCNq7JAFm8DFaoe2MwSslZTQ/).\r\n1. If the ECH config is known to the attacker, then it can use ClientECH.config_id to distinguish real-ECH from grease-ECH. \r\n1. The outer SNI must match ECHConfig.public_name. Hence, for connections to a given backend server, the outer SNI will be different in real-ECH than in grease-ECH.\r\n1. The client and server must negotiate TLS 1.3 when ECH is accepted, but may otherwise negotiate an earlier version. In particular, it is valid for a client to run grease-ECH but not indicate support for 1.3.\r\n1. PSK must not be offered in the outer CH in real-ECH, but may be offered in grease-ECH. In general, the set of extensions negotiated may depend on whether ECH was accepted.\r\n1. The client-facing server must not request client authentication when rejecting ECH, but the backend server may request client authentication when ECH was accepted.\r\n1. Whether or not an HRR message is issued by the server may depend on ECH acceptance.\r\n1. There are a few active distinguisher attacks that exploit the HRR codepath.\r\n\r\nSome of these distinguishers can be mitigated by careful implementation, while mitigating others would require changes to the specification. (E.g., #353.) However, it's unlikely that _all_ implementations will mitigate _all_ of these distinguishers. Moreover, future extensions are likely to change the shape of TLS in a way that leads to yet more distinguishers.\r\n\r\nGiven all of this, I wonder if indistinguishability (of real-ECH from grease-ECH) is the right way to think about this problem. It seems to me that it's stronger than strictly necessary, since the existence of a distinguisher does not necessarily imply that some feature of real-ECH will trigger middlebox misbehavior that would not otherwise be triggered by grease-ECH. For example, while the outer SNI might be a dead give away of likely ECH usage, this value is unlikely to impact middlebox behavior. Similarly, the absence of the PSK extension in real-ECH is unlikely to cause issues.\r\n\r\nIf it were possible to enumerate the set of properties that impact middlebox behavior, then ensuring that middleboxes don't differentiate between real-ECH and grease-ECH may simply be a matter of ensuring that this set of properties does not vary. This approach would be roughly analogous to the design of \"Middlebox Compatibility Mode\" in TLS 1.3, which makes the handshake \"look like\" a particular mode of 1.2 that middleboxes are known to tolerate. Of course, a curious adversary (e.g., a censor) can easily distinguish between these, but experience suggests that middleboxes do not treat them differently.\r\n\r\nThis leaves us the daunting task of deciding what features are known to impact the behavior of existing middleboxes. Here's a preliminary list of things that might fit in this category. For the sake of discussion, let's call them **differentiable features**:\r\n1. The set of extensions that appear to be negotiated;\r\n1. Visible alerts, e.g., \"bad_record_mac\";\r\n1. Number of round trips in a given transport context (e.g., TCP connection);\r\n1. Packet size, or the number of packets comprising a single message;\r\n1. Timing;\r\n1. ...\r\n\r\nI think we should set the following goals for ECH-09 (or some draft that follows it).\r\n1. If we can agree on a set of differentiable features, then we should ensure that this set does not vary between real-ECH and grease-ECH.\r\n1. ECH-08 aims only to mitigate **passive** \"don't stick out\" attacks, but there is a lot of evidence that middleboxes exhibit **active** behavior. (For example, middleboxes have been observed removing CH extensions they don't recognize or adding their own.) Thus, we should aim to thwart attacks that change the set of differentiable features in real-ECH vs. grease-ECH. This includes @huitema's attack in particular: see #353.\r\n1. To the greatest extent possible, the spec should allow for implementations to aim for the strongest possible notion of security. For example, we might consider relaxing the requirement that the outer SNI matches ECHConfig.public_name, so long as this change doesn't impact interoperability.\r\n",
       "createdAt": "2020-11-03T01:28:48Z",
-      "updatedAt": "2020-11-24T21:29:51Z",
+      "updatedAt": "2020-12-15T00:42:32Z",
       "closedAt": null,
       "comments": [
         {
@@ -8113,6 +8113,76 @@
           "body": "For the PSK extension specifically, I think we have two distinguishers to consider:\r\n\r\n- GREASE ECH + PSK extension in a Client Hello identifies GREASE ECH, due to PSKs being disallowed in CHOuter.\r\n- Real ECH + resumption (or any accepted PSK) identifies accepted ECH. CHOuter contains no PSK extension, but SH will contain the pre_shared_key extension (selected_identity).\r\n\r\n\r\n\r\n",
           "createdAt": "2020-11-24T21:29:50Z",
           "updatedAt": "2020-11-24T21:29:50Z"
+        },
+        {
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "body": "Due to assertions stated in IETF meetings that ECH isn't an anti-censorship tool, and the literally innumerable difficulties in making real ECH indistinguishable from GREASE ECH (as mentioned above), I propose dropping the \"do not stick out\" goal. The primary aim of ECH is to make the SNI private, and it's possible to keep the SNI private while telegraphing that we're using ECH.\r\n\r\nWe can, however, still use GREASE to make sure middleboxes are prepared to handle the code point and the larger size of the ClientHello.",
+          "createdAt": "2020-12-10T20:55:25Z",
+          "updatedAt": "2020-12-10T20:55:25Z"
+        },
+        {
+          "author": "bemasc",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "I agree with cjpatton's analysis.\r\n\r\nI don't think anyone is asking that these things be \"indistinguishable\" to a determined active intermediary in the common case.  That is clearly impossible (e.g. cjpatton's attack 2).  Instead, the goal is to minimize barriers to deployment of ECH.  If ECH isn't reliable in practice, it won't be widely deployed, and so will not keep the SNI private.\r\n\r\nIn my view, the minimum threshold is: a passive intermediary with only per-connection state must not be able to distinguish ECH from GREASE with confidence for a typical client and server configuration.  Defenses for less common protocol uses and low-grade active intermediaries (e.g. simple replay) are good to have but we shouldn't delay the protocol if they prove difficult.\r\n\r\nI think the only remaining issue to reach this level is Real ECH + resumption (kjacobs second attack).  All the other attacks (a) only affect a subset of GREASE (e.g. resumption GREASE), (b) require the intermediary to be active (emitting or modifying packets), or (c) require the intermediary to have per-server state (e.g. a DNS database or a persistent server profile).  We should build defenses for those cases too where we can, but some are intractable, and that's OK.",
+          "createdAt": "2020-12-11T16:40:59Z",
+          "updatedAt": "2020-12-11T16:40:59Z"
+        },
+        {
+          "author": "huitema",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "It is kind of sad, but I agree with the analysis. The sticking out starts with the definition of ECH as an extension, which already provides a differentiation from standard TLS. The theory that grease will fix that by making it hard to distinguish \"real\" and \"fake\" ECH is most probably wrong, except if the middlebox is really naive. That means the only sure way to grease the ECH function is to actually use it, even when the inner SNI is the same as the outer ECH -- only a real ECH is undistinguishable from a real ECH.",
+          "createdAt": "2020-12-11T17:23:57Z",
+          "updatedAt": "2020-12-11T17:23:57Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "I agree with @bemasc. The ECH goals in the document mostly align with this proposed minimum threshold. I think we should close this with no action, or tweak language to make this more clear, assuming we have consensus.\r\n\r\n@ekr, @davidben, @martinthomson, @kazuho: what do you think?",
+          "createdAt": "2020-12-11T17:47:00Z",
+          "updatedAt": "2020-12-11T17:50:46Z"
+        },
+        {
+          "author": "cjpatton",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "I don't think action is needed at this point, but I think we should keep the issue open until we're closer to RFC. We're pretty close to interop, and we should expect real-world experiments to follow shortly thereafter. Those experiments will reveal if we missed anything, and it will be useful to have this issue as a reference.",
+          "createdAt": "2020-12-11T18:08:22Z",
+          "updatedAt": "2020-12-11T18:08:22Z"
+        },
+        {
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "body": "> In my view, the minimum threshold is: a passive intermediary with only per-connection state must not be able to distinguish ECH from GREASE with confidence for a typical client and server configuration.\r\n\r\nThis seems like a reasonable objective for avoiding operational/ossification issues.",
+          "createdAt": "2020-12-11T18:15:21Z",
+          "updatedAt": "2020-12-11T18:15:21Z"
+        },
+        {
+          "author": "ekr",
+          "authorAssociation": "COLLABORATOR",
+          "body": "@bemasc's description sounds right. I would note that this seems to actually make #353 unnecessary, right? Not saying we necessarily need to not do it, but...\r\n\r\n",
+          "createdAt": "2020-12-13T00:13:38Z",
+          "updatedAt": "2020-12-13T00:13:56Z"
+        },
+        {
+          "author": "ekr",
+          "authorAssociation": "COLLABORATOR",
+          "body": "Just to see about sharpening @bemasc's description: if an attacker needs to interfere with a connection in such a way that it would cause a failure in that connection in order to determine whether ECH is in use, that's out of scope, right?",
+          "createdAt": "2020-12-13T00:15:24Z",
+          "updatedAt": "2020-12-13T00:15:24Z"
+        },
+        {
+          "author": "bemasc",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "> if an attacker needs to interfere with a connection in such a way that it would cause a failure in that connection in order to determine whether ECH is in use, that's out of scope, right?\r\n\r\nYes, that seems like a higher threshold than the one I proposed (purely passive).  I'm not sure about \"out of scope\".  For example, I fully support #353.  I think that when we run into problems like this, we should solve them if we have a solution available, but not delay the protocol if we have to go searching for one.",
+          "createdAt": "2020-12-13T21:07:55Z",
+          "updatedAt": "2020-12-13T21:07:55Z"
+        },
+        {
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "body": ">  I think that when we run into problems like this, we should solve them if we have a solution available, but not delay the protocol if we have to go searching for one.\r\n\r\nI disagree. I think that if a particular threat model is out of scope, it's out of scope, and any mitigations of them shouldn't be in the document. There's no point in half-measures that ultimately won't be sufficient for addressing certain types of attackers but will add complexity.",
+          "createdAt": "2020-12-15T00:42:31Z",
+          "updatedAt": "2020-12-15T00:42:31Z"
         }
       ]
     },
@@ -8234,7 +8304,7 @@
       ],
       "body": "I heard about Encrypted Client Hello recently. Looks like a good idea. I have been thinking about implementing and suggest a clarification in the draft.\r\n\r\nIt needs to specify which ClientHello the client should use to compute the transcript hash. I assume if the connection to the backend server is successful it should use the ClientHelloInner, Else, if it authenticates to the public name it should use the ClientHelloOuter.\r\n\r\nMight be kind of obvious, but explicit > implicit. Maybe some text extending Section 4.4.1 of RFC8446 should be added.",
       "createdAt": "2020-11-13T16:36:25Z",
-      "updatedAt": "2020-11-16T16:48:47Z",
+      "updatedAt": "2020-12-15T00:27:07Z",
       "closedAt": null,
       "comments": [
         {
@@ -8243,6 +8313,20 @@
           "body": "Thanks, @kylon94! We'll try and clarify this.",
           "createdAt": "2020-11-16T16:48:47Z",
           "updatedAt": "2020-11-16T16:48:47Z"
+        },
+        {
+          "author": "kylon94",
+          "authorAssociation": "NONE",
+          "body": "Looking at section 5.1, I think some clarification would be helpful. It makes sense that the full ClientHelloInner with the outer extensions should be included in the hash but this isn't clear. In particular highlighting the change in message length between the ClientHelloInner and EncodedClientHelloInner would help. Like the issue above, not a big deal but it could trip up a developer.",
+          "createdAt": "2020-12-10T15:12:55Z",
+          "updatedAt": "2020-12-10T15:12:55Z"
+        },
+        {
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "body": "@kylon94 Why would highlighting the change in message length help with this?",
+          "createdAt": "2020-12-15T00:27:07Z",
+          "updatedAt": "2020-12-15T00:27:07Z"
         }
       ]
     },
@@ -8258,7 +8342,7 @@
       "labels": [],
       "body": "Martin pointed out a potential SNI leak via resumption under the following conditions:\r\n1. A client connects to server \"A\" without ECH, and receives a session ticket.\r\n2. The client later resumes the connection to server \"A\" using ECH. An observer can see that a PSK was accepted (via SH containing pre_shared_key). \r\n4. If any of the hosts previously visited by the client are known, an attacker can do a lookup of each for a config_id matching the resumed session. \r\n\r\nThis effectively reduces the size of the anonymity set for a particular client/victim.\r\n\r\nWhile it's true that the hostname is already leaked by the first connection without ECH, this seems to violate the security goals as they are written. We used to require separation between non-ECH and ECH PSKs, but it was removed in #285.",
       "createdAt": "2020-11-24T22:08:33Z",
-      "updatedAt": "2020-11-30T22:16:45Z",
+      "updatedAt": "2020-12-10T15:58:34Z",
       "closedAt": null,
       "comments": [
         {
@@ -8288,8 +8372,45 @@
           "body": "Is it actually additional evidence? It doesn't seem to narrow the usual ECH anonymity set, just identifies it. If I understand you correctly, (3) is:\r\n\r\n* The attacker observes a connection from the client with some config_id and some secret SNI A.\r\n* The attacker queries DNS or the recovery flow[*] for the cleartext SNIs that the client previously visited and sees if one of them, B, has an ECHConfig with matching config_id.\r\n* If there is a match, the attacker learns that B was in the same anonymity set as A.\r\n\r\nThe attacker learns this whether or not the connection resumes. The attacker also hasn't expanded the anonymity sent. In fact, they didn't even need to query sites the client previously visited. They could just as easily query the top N sites or a list of popular hosting providers known to support ECH. I think this information is part of the baseline for our security goals.\r\n\r\nIt is true that a client which, before ECH, leaked that it visited A many times is more likely to visit A again in the future. That seems fundamental. I think the interesting thing is that (2) tells the observer that it is *some* repeat visit, which increases the chance it's A. (But doesn't guarantee it. Maybe I've found a new site in the anonymity set that I like.)\r\n\r\nI don't think PSK separation even mitigates this. Repeat post-ECH visits still reveal whether resumption happened in ServerHello. And even if we fixed that, depending on how much padding the client is willing to add, the ClientHello size will reveal whether the client had a ticket to offer. I think the only thing PSK separation mitigates is that _immediately_ after the client/server pair deploys ECH, you get to reset the repeat visit counter. But once you count to 2 again, you've got the same signal as before.\r\n\r\n[*] Although there's no actual requirement that the recovery flow use the same ECHConfig as the long-lived DNS config...",
           "createdAt": "2020-11-30T22:02:45Z",
           "updatedAt": "2020-11-30T22:05:20Z"
+        },
+        {
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "body": "> In fact, they didn't even need to query sites the client previously visited.\r\n\r\nWell no, but since they have that information, they can further reduce the anonymity set. (The attacker doesn't need to consider the sites the user never visited.)\r\n\r\nAs soon as you involve non-ECH in a session, the security guarantees just don't hold. I'm fine with just being explicit about that in the draft.",
+          "createdAt": "2020-12-10T04:22:34Z",
+          "updatedAt": "2020-12-10T04:22:34Z"
+        },
+        {
+          "author": "kjacobs-moz",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "> > In fact, they didn't even need to query sites the client previously visited.\r\n> \r\n> Well no, but since they have that information, they can further reduce the anonymity set. (The attacker doesn't need to consider the sites the user never visited.)\r\n> \r\n> As soon as you involve non-ECH in a session, the security guarantees just don't hold. I'm fine with just being explicit about that in the draft.\r\n\r\nThat's probably the best way to resolve this, given the impracticality and constraints (to time of deployment or enablement). I'll have a PR up by the end of the week. \r\n",
+          "createdAt": "2020-12-10T15:36:14Z",
+          "updatedAt": "2020-12-10T15:36:14Z"
+        },
+        {
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "body": "That works for me. Thanks, @kjacobs-moz!",
+          "createdAt": "2020-12-10T15:58:34Z",
+          "updatedAt": "2020-12-10T15:58:34Z"
         }
       ]
+    },
+    {
+      "number": 373,
+      "id": "MDU6SXNzdWU3Njg0MTg1MDQ=",
+      "title": "ServerHello.random in HRR",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/issues/373",
+      "state": "OPEN",
+      "author": "cbartle891",
+      "authorAssociation": "COLLABORATOR",
+      "assignees": [],
+      "labels": [],
+      "body": "While attempting to draft a change for https://github.com/tlswg/draft-ietf-tls-esni/issues/359, I was confused by this part of section 6.1.4:\r\n\r\n\"If the server sends a HelloRetryRequest in response to the ClientHello, the client sends a second updated ClientHello per the rules in [RFC8446]. However, at this point, the client does not know whether the server processed ClientHelloOuter or ClientHelloInner\"\r\n\r\nWhen does the client learn whether the server processed ClientHelloOuter or ClientHelloInner? If the client sees that the last 8 bytes of ServerHello.random were set to the first 8 bytes of `accept_confirmation`, does it just assume that the first ClientHello that the server processed was a ClientHelloInner? That seems like a big assumption. Couldn't the following happen?:\r\n\r\n```\r\nClient                           Client-facing server             Backend server\r\n              CHO(CHI)\r\n           ------------->\r\n                                   (processes CHO)\r\n                HRR\r\n           <-------------\r\n              CHO(CHI)\r\n           ------------->\r\n                                                          CHI\r\n                                                      ----------->\r\n                                                                  (processes CHI)\r\n                            SH\r\n          <-----------------------------------------------------\r\n\r\n```\r\n\r\nIf this can happen, the client will assume, after it receives the SH, that the server processed the first ClientHelloInner, but this is in fact not the case, and the transcript will break. I mean, I guess that's okay if you don't want this behavior to succeed, but AFAICT, the draft doesn't explicitly say that the client-facing server shouldn't do this. Should it?\r\n\r\n(Sorry if this is in fact already resolved somewhere in the draft. Also I'm pretty sure it's a different issue from https://github.com/tlswg/draft-ietf-tls-esni/issues/333.)",
+      "createdAt": "2020-12-16T03:35:19Z",
+      "updatedAt": "2020-12-16T03:35:19Z",
+      "closedAt": null,
+      "comments": []
     }
   ],
   "pulls": [
@@ -26605,7 +26726,7 @@
       "labels": [],
       "body": "Closes #264.",
       "createdAt": "2020-09-30T18:51:06Z",
-      "updatedAt": "2020-12-02T02:56:07Z",
+      "updatedAt": "2020-12-08T19:51:49Z",
       "baseRepository": "tlswg/draft-ietf-tls-esni",
       "baseRefName": "master",
       "baseRefOid": "32ce20a4a0e256733d03ec56cd8081df1d794012",
@@ -27012,6 +27133,86 @@
               "body": "```suggestion\r\n(ECHConfig.maximum_name_length) when computing the padding length as follows:\r\n```",
               "createdAt": "2020-10-06T01:44:54Z",
               "updatedAt": "2020-10-06T01:48:46Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTQ3NTc0NTI3",
+          "commit": {
+            "abbreviatedOid": "8ca7de2"
+          },
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-12-08T19:47:38Z",
+          "updatedAt": "2020-12-08T19:47:39Z",
+          "comments": [
+            {
+              "originalPosition": 30,
+              "body": "Should this be ClientHelIoInner?",
+              "createdAt": "2020-12-08T19:47:38Z",
+              "updatedAt": "2020-12-08T19:51:18Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTQ3NTc1OTQ1",
+          "commit": {
+            "abbreviatedOid": "8ca7de2"
+          },
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-12-08T19:49:38Z",
+          "updatedAt": "2020-12-08T19:49:38Z",
+          "comments": [
+            {
+              "originalPosition": 41,
+              "body": "s/zeros bytes/zero bytes/?",
+              "createdAt": "2020-12-08T19:49:38Z",
+              "updatedAt": "2020-12-08T19:49:38Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTQ3NTc3MDY1",
+          "commit": {
+            "abbreviatedOid": "8ca7de2"
+          },
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-12-08T19:51:09Z",
+          "updatedAt": "2020-12-08T19:51:09Z",
+          "comments": [
+            {
+              "originalPosition": 38,
+              "body": "When *and only when* solicited by the client? If so, why?",
+              "createdAt": "2020-12-08T19:51:09Z",
+              "updatedAt": "2020-12-08T19:51:09Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTQ3NTc3NTU0",
+          "commit": {
+            "abbreviatedOid": "8ca7de2"
+          },
+          "author": "cbartle891",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-12-08T19:51:48Z",
+          "updatedAt": "2020-12-08T19:51:49Z",
+          "comments": [
+            {
+              "originalPosition": 29,
+              "body": "Why not SHOULD?",
+              "createdAt": "2020-12-08T19:51:48Z",
+              "updatedAt": "2020-12-08T19:51:49Z"
             }
           ]
         }
@@ -33883,6 +34084,123 @@
           "body": "",
           "createdAt": "2020-12-02T02:55:50Z",
           "updatedAt": "2020-12-02T02:55:50Z",
+          "comments": []
+        }
+      ]
+    },
+    {
+      "number": 371,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTM3MTc4MTMy",
+      "title": "Clarify privacy goal scope",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/371",
+      "state": "OPEN",
+      "author": "kjacobs-moz",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "Addresses #369",
+      "createdAt": "2020-12-11T17:22:16Z",
+      "updatedAt": "2020-12-11T18:10:35Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "7a5c68faf36dcc749a4ab763bf3a600239849b4f",
+      "headRepository": "kjacobs-moz/draft-ietf-tls-esni",
+      "headRefName": "clarify-goal-scope",
+      "headRefOid": "054eed3e0e95322c3ca8f38a87014e21de83806b",
+      "closedAt": null,
+      "mergedAt": null,
+      "mergedBy": null,
+      "mergeCommit": null,
+      "comments": [
+        {
+          "author": "kjacobs-moz",
+          "authorAssociation": "CONTRIBUTOR",
+          "body": "Done. Thanks!",
+          "createdAt": "2020-12-11T18:10:35Z",
+          "updatedAt": "2020-12-11T18:10:35Z"
+        }
+      ],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTUwMzg2NTIw",
+          "commit": {
+            "abbreviatedOid": "5c8665c"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "This LGTM. I have a slight rephrasing, but feel free to reject!",
+          "createdAt": "2020-12-11T18:01:06Z",
+          "updatedAt": "2020-12-11T18:05:10Z",
+          "comments": [
+            {
+              "originalPosition": 7,
+              "body": "```suggestion\r\nAttacks that rely on non-ECH traffic to infer server identity in an ECH connection are \r\nout of scope for this document. For example, a client that connects to a particular host \r\nprior to ECH deployment may later resume a connection to that same host after ECH \r\ndeployment, thereby linking the resulting ECH connection to the original non-ECH \r\nconnection.\r\n```",
+              "createdAt": "2020-12-11T18:04:45Z",
+              "updatedAt": "2020-12-11T18:09:06Z"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "number": 372,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTM5ODcyODkz",
+      "title": "Bump HPKE-06 to -07",
+      "url": "https://github.com/tlswg/draft-ietf-tls-esni/pull/372",
+      "state": "MERGED",
+      "author": "cjpatton",
+      "authorAssociation": "CONTRIBUTOR",
+      "assignees": [],
+      "labels": [],
+      "body": "TODO: Ensure that the section numbers referenced in the HPKE draft are still correct.",
+      "createdAt": "2020-12-14T23:49:16Z",
+      "updatedAt": "2020-12-16T14:28:55Z",
+      "baseRepository": "tlswg/draft-ietf-tls-esni",
+      "baseRefName": "master",
+      "baseRefOid": "7a5c68faf36dcc749a4ab763bf3a600239849b4f",
+      "headRepository": "cjpatton/draft-ietf-tls-esni",
+      "headRefName": "bump-hpke",
+      "headRefOid": "7d2a4e6ec5d56fb0e22325bba6993381eb7b1fc2",
+      "closedAt": "2020-12-16T14:28:55Z",
+      "mergedAt": "2020-12-16T14:28:55Z",
+      "mergedBy": "chris-wood",
+      "mergeCommit": {
+        "oid": "78b75e6cf34eabb6435a99132cc70bbe5be15fa9"
+      },
+      "comments": [],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTUzNzM4NTU2",
+          "commit": {
+            "abbreviatedOid": "9db02ad"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "COMMENTED",
+          "body": "",
+          "createdAt": "2020-12-16T14:28:19Z",
+          "updatedAt": "2020-12-16T14:28:20Z",
+          "comments": [
+            {
+              "originalPosition": 13,
+              "body": "These are the same in the latest draft. :-)\r\n```suggestion\r\n```",
+              "createdAt": "2020-12-16T14:28:19Z",
+              "updatedAt": "2020-12-16T14:28:25Z"
+            }
+          ]
+        },
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTUzNzM5MDQ0",
+          "commit": {
+            "abbreviatedOid": "7d2a4e6"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "COLLABORATOR",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-12-16T14:28:51Z",
+          "updatedAt": "2020-12-16T14:28:51Z",
           "comments": []
         }
       ]
