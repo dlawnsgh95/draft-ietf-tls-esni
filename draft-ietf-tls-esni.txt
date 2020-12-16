@@ -5,11 +5,11 @@
 tls                                                          E. Rescorla
 Internet-Draft                                                RTFM, Inc.
 Intended status: Standards Track                                  K. Oku
-Expires: 5 June 2021                                              Fastly
+Expires: 19 June 2021                                             Fastly
                                                              N. Sullivan
                                                                C.A. Wood
                                                               Cloudflare
-                                                         2 December 2020
+                                                        16 December 2020
 
 
                        TLS Encrypted Client Hello
@@ -35,7 +35,7 @@ Status of This Memo
    time.  It is inappropriate to use Internet-Drafts as reference
    material or to cite them other than as "work in progress."
 
-   This Internet-Draft will expire on 5 June 2021.
+   This Internet-Draft will expire on 19 June 2021.
 
 Copyright Notice
 
@@ -279,7 +279,7 @@ Table of Contents
 
 4.  Encrypted ClientHello Configuration
 
-   ECH uses draft-06 of HPKE for public key encryption
+   ECH uses draft-07 of HPKE for public key encryption
    [I-D.irtf-cfrg-hpke].  The ECH configuration is defined by the
    following "ECHConfig" structure.
 
@@ -1741,13 +1741,13 @@ A.1.1.  TLS in Early Data
    client-facing server decrypts early data payloads to uncover Client
    Hellos destined for the backend server, and forwards them onwards as
    necessary.  Afterwards, all records to and from backend servers are
-   forwarded by the client-facing server - unmodified.  This avoids
+   forwarded by the client-facing server -- unmodified.  This avoids
    double encryption of TLS records.
 
    Problems with this approach are: (1) servers may not always be able
    to distinguish inner Client Hellos from legitimate application data,
    (2) nested 0-RTT data may not function correctly, (3) 0-RTT data may
-   not be supported - especially under DoS - leading to availability
+   not be supported -- especially under DoS -- leading to availability
    concerns, and (4) clients must bootstrap tunnels (sessions), costing
    an additional round trip and potentially revealing the SNI during the
    initial connection.  In contrast, encrypted SNI protects the SNI in a
